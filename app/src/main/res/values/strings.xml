@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Blok CE PSA</string>
+    <string name="scan_qris_title">Scan QRIS Pembayaran</string>
+    <string name="scan_qris_instruction">Arahkan kamera ke kode QRIS DANA untuk mengisi konfirmasi otomatis</string>
+    <string name="camera_permission_title">Izin Kamera Diperlukan</string>
+    <string name="camera_permission_rationale">Aktifkan akses kamera agar Anda dapat memindai kode QRIS untuk pembayaran iuran dengan cepat.</string>
+    <string name="camera_permission_denied_settings">Izin kamera ditolak permanen. Buka Pengaturan aplikasi untuk mengaktifkan akses kamera.</string>
+    <string name="camera_permission_grant_cta">Izinkan Kamera</string>
+    <string name="camera_permission_settings_cta">Buka Pengaturan</string>
+    <string name="qris_scanner_close_cd">Tutup pemindai QRIS</string>
+    <string name="qris_scanner_torch_cd">Nyalakan atau matikan lampu kilat</string>
+</resources>

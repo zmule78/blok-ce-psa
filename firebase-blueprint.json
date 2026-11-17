@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Delegated admin authorization record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the authorized admin" },
+        "email": { "type": "string", "description": "Verified email address of the admin" },
+        "roleLabel": { "type": "string", "description": "Admin role label e.g. Bendahara Blok" },
+        "inviteCode": { "type": "string", "description": "Admin invite code used to activate access" },
+        "grantedByUid": { "type": "string", "description": "UID of the primary admin who issued the invite" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "email", "roleLabel", "inviteCode", "grantedByUid", "createdAt"]
+    },
+    "AdminInvite": {
+      "title": "AdminInvite",
+      "description": "One-time admin invite code issued by the primary admin to onboard pengurus.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Uppercase alphanumeric invite code" },
+        "targetEmail": { "type": "string", "description": "Optional restricted email address (empty string if open)" },
+        "label": { "type": "string", "description": "Role label assigned upon redemption" },
+        "used": { "type": "boolean", "description": "Whether this one-time code has been redeemed" },
+        "usedByUid": { "type": "string", "description": "UID of the user who redeemed the code" },
+        "usedByEmail": { "type": "string", "description": "Verified email of the user who redeemed the code" },
+        "createdByUid": { "type": "string", "description": "Primary admin UID who created this code" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["code", "targetEmail", "label", "used", "usedByUid", "usedByEmail", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Global Blok CE PSA payment configuration, dues rates, and reminder blast settings.",
+      "type": "object",
+      "properties": {
+        "blokName": { "type": "string", "description": "Display name of the residential block" },
+        "subtitle": { "type": "string", "description": "Community subtitle" },
+        "danaNumber": { "type": "string", "description": "Official DANA destination phone number" },
+        "danaAccountName": { "type": "string", "description": "Official DANA account holder name" },
+        "customQrisData": { "type": "string", "description": "Optional custom QRIS image data URI or URL" },
+        "iuranAmount": { "type": "integer", "description": "Monthly Iuran amount in IDR" },
+        "hidmatAmount": { "type": "integer", "description": "Monthly Hidmat amount in IDR" },
+        "reminderEnabled": { "type": "boolean", "description": "Whether unpaid billing reminder popup is active" },
+        "reminderTitle": { "type": "string", "description": "Reminder dialog title" },
+        "reminderMessage": { "type": "string", "description": "Reminder dialog body message" },
+        "pushBlastId": { "type": "integer", "description": "Timestamp ID of latest admin reminder blast" },
+        "pushTargetUserId": { "type": "string", "description": "Target scope for reminder blast (all_unpaid or specific UID)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of creation (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update (FieldValue.serverTimestamp())" }
+      },
+      "required": ["blokName", "subtitle", "danaNumber", "danaAccountName", "customQrisData", "iuranAmount", "hidmatAmount", "reminderEnabled", "reminderTitle", "reminderMessage", "pushBlastId", "pushTargetUserId", "createdAt", "updatedAt"]
+    },
+    "Resident": {
+      "title": "Resident",
+      "description": "Resident profile with PII isolated to owner and admin.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the resident" },
+        "username": { "type": "string", "description": "Short resident handle" },
+        "name": { "type": "string", "description": "Full display name" },
+        "house": { "type": "string", "description": "House number e.g. Blok CE-05" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "email": { "type": "string", "description": "Verified email address" },
+        "role": { "type": "string", "enum": ["admin", "member"], "description": "Access role" },
+        "roleLabel": { "type": "string", "description": "Human-readable role label" },
+        "hidmatEnabled": { "type": "boolean", "description": "Whether Hidmat contribution applies to this house" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "username", "name", "house", "phone", "email", "role", "roleLabel", "hidmatEnabled", "createdAt", "updatedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Monthly Iuran or Hidmat payment submission and verification record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "month": { "type": "string", "description": "Billing period YYYY-MM" },
+        "type": { "type": "string", "enum": ["iuran", "hidmat"], "description": "Dues category" },
+        "amount": { "type": "integer", "description": "Payment amount in IDR" },
+        "status": { "type": "string", "enum": ["unpaid", "pending", "paid"], "description": "Payment lifecycle status (unpaid, pending verification, paid)" },
+        "dateLabel": { "type": "string", "description": "Formatted payment date label" },
+        "method": { "type": "string", "description": "Payment method label" },
+        "note": { "type": "string", "description": "Optional transfer note" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "month", "type", "amount", "status", "dateLabel", "method", "note", "createdAt", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Community announcement or news item published by Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Announcement headline" },
+        "category": { "type": "string", "description": "Category label" },
+        "imageUrl": { "type": "string", "description": "Optional image URL or compressed data URI" },
+        "content": { "type": "string", "description": "Announcement body text" },
+        "urgent": { "type": "boolean", "description": "Whether marked as urgent" },
+        "published": { "type": "boolean", "description": "Published visibility flag" },
+        "displayDate": { "type": "string", "description": "Human-readable publish date" },
+        "authorId": { "type": "string", "description": "Admin UID" },
+        "authorName": { "type": "string", "description": "Admin display name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["title", "category", "imageUrl", "content", "urgent", "published", "displayDate", "authorId", "authorName", "createdAt", "updatedAt"]
+    },
+    "MonthlySummary": {
+      "title": "MonthlySummary",
+      "description": "Non-PII aggregate progress counters per billing month.",
+      "type": "object",
+      "properties": {
+        "month": { "type": "string", "description": "Billing period YYYY-MM" },
+        "totalMembers": { "type": "integer", "description": "Total resident members count" },
+        "paidIuranCount": { "type": "integer", "description": "Count of residents with paid Iuran" },
+        "pendingCount": { "type": "integer", "description": "Count of pending verifications" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["month", "totalMembers", "paidIuranCount", "pendingCount", "updatedAt"]
+    },
+    "AdminWebhookConfig": {
+      "title": "AdminWebhookConfig",
+      "description": "Admin-only webhook endpoint URL, HMAC secret, and relay settings.",
+      "type": "object",
+      "properties": {
+        "webhookUrl": { "type": "string", "description": "HTTPS endpoint URL receiving signed DANA webhook payloads" },
+        "webhookSecret": { "type": "string", "description": "HMAC-SHA256 signing secret shared with webhook server" },
+        "relayFromAndroidEnabled": { "type": "boolean", "description": "Whether incoming Android DANA notifications are relayed to webhookUrl" },
+        "autoVerifyWebhookEvents": { "type": "boolean", "description": "Whether RECEIVED webhook events auto-verify matching payments" },
+        "updatedByUid": { "type": "string", "description": "Admin UID who updated webhook settings" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["webhookUrl", "webhookSecret", "relayFromAndroidEnabled", "autoVerifyWebhookEvents", "updatedByUid", "createdAt", "updatedAt"]
+    },
+    "DanaWebhookEvent": {
+      "title": "DanaWebhookEvent",
+      "description": "Real-time incoming DANA webhook transaction event and verification outcome.",
+      "type": "object",
+      "properties": {
+        "referenceId": { "type": "string", "description": "Unique DANA transaction or webhook reference ID" },
+        "source": { "type": "string", "description": "Webhook origin e.g. dana_merchant_webhook, gateway_webhook, android_notification_relay" },
+        "amount": { "type": "integer", "description": "Incoming transaction amount in IDR" },
+        "senderName": { "type": "string", "description": "Detected payer name" },
+        "senderPhone": { "type": "string", "description": "Optional payer phone hint" },
+        "houseHint": { "type": "string", "description": "Optional house number hint" },
+        "monthHint": { "type": "string", "description": "Optional billing period YYYY-MM hint" },
+        "paymentTypeHint": { "type": "string", "description": "Optional dues type hint (iuran, hidmat, both)" },
+        "rawPayload": { "type": "string", "description": "Raw notification or JSON summary" },
+        "status": { "type": "string", "enum": ["RECEIVED", "AUTO_VERIFIED", "NEED_REVIEW", "UNMATCHED"], "description": "Verification status" },
+        "matchedPaymentId": { "type": "string", "description": "Matched payment document ID if verified" },
+        "matchedSummary": { "type": "string", "description": "Human-readable verification summary" },
+        "verifiedByUid": { "type": "string", "description": "Verifier UID or webhook actor identifier" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["referenceId", "source", "amount", "senderName", "senderPhone", "houseHint", "monthHint", "paymentTypeHint", "rawPayload", "status", "matchedPaymentId", "matchedSummary", "verifiedByUid", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Delegated admin authorization records keyed by Firebase Auth UID"
+    },
+    "/admin_invites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/AdminInvite" },
+      "description": "One-time admin invite codes issued by the primary admin"
+    },
+    "/system_settings/{configId}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "Global payment and reminder settings document (ID: config)"
+    },
+    "/residents/{residentId}": {
+      "schema": { "$ref": "#/entities/Resident" },
+      "description": "Resident profiles keyed by Firebase Auth UID"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Dues payment submissions and admin verifications"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Community announcements and news"
+    },
+    "/monthly_summaries/{monthCode}": {
+      "schema": { "$ref": "#/entities/MonthlySummary" },
+      "description": "Non-PII monthly payment progress counters"
+    },
+    "/admin_configs/{configId}": {
+      "schema": { "$ref": "#/entities/AdminWebhookConfig" },
+      "description": "Admin-only webhook endpoint configuration (ID: dana_webhook)"
+    },
+    "/dana_webhook_events/{eventId}": {
+      "schema": { "$ref": "#/entities/DanaWebhookEvent" },
+      "description": "Real-time incoming DANA webhook transactions (admin-only)"
+    }
+  }
+}

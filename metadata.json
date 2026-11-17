@@ -1,0 +1,6 @@
+{
+  "name": "Blok CE PSA",
+  "description": "Aplikasi warga dan iuran Blok CE PSA dengan Cloud Firestore, Google Sign-In, dan cache SQLite offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

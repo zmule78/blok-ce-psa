@@ -1,0 +1,13 @@
+{
+  "name": "blok-ce-psa-dana-webhook",
+  "version": "1.0.0",
+  "description": "Real-time DANA incoming transaction webhook receiver & auto-verifier for Blok CE PSA Firestore.",
+  "main": "dana-webhook-server.js",
+  "scripts": {
+    "start": "node dana-webhook-server.js",
+    "test": "node --test dana-webhook.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

@@ -1,0 +1,468 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Deny all unspecified paths by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- HELPER PRIMITIVES ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdminEmail() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email == 'kfkhoerul05@gmail.com';
+    }
+
+    function isAdmin() {
+      return isAdminEmail() ||
+        (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+    function isValidAdminRecord(data, uid) {
+      return data.userId is string && data.userId == uid && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() >= 1 && data.email.size() <= 120 &&
+             data.roleLabel is string && data.roleLabel.size() >= 1 && data.roleLabel.size() <= 60 &&
+             data.inviteCode is string && data.inviteCode.size() <= 32 &&
+             data.grantedByUid is string && data.grantedByUid.size() >= 1 && data.grantedByUid.size() <= 128;
+    }
+
+    function isValidAdminInvite(data, inviteCode) {
+      return data.code is string && data.code == inviteCode &&
+             data.code.size() >= 6 && data.code.size() <= 32 &&
+             data.code.matches('^[A-Z0-9\\-]+$') &&
+             data.targetEmail is string && data.targetEmail.size() <= 120 &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 60 &&
+             data.used is bool &&
+             data.usedByUid is string && data.usedByUid.size() <= 128 &&
+             data.usedByEmail is string && data.usedByEmail.size() <= 120 &&
+             data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128;
+    }
+
+    function isValidSystemSettings(data) {
+      return data.blokName is string && data.blokName.size() >= 1 && data.blokName.size() <= 80 &&
+             data.subtitle is string && data.subtitle.size() <= 150 &&
+             data.danaNumber is string && data.danaNumber.size() >= 5 && data.danaNumber.size() <= 30 &&
+             data.danaAccountName is string && data.danaAccountName.size() >= 1 && data.danaAccountName.size() <= 100 &&
+             data.customQrisData is string && data.customQrisData.size() <= 250000 &&
+             data.iuranAmount is int && data.iuranAmount >= 0 && data.iuranAmount <= 10000000 &&
+             data.hidmatAmount is int && data.hidmatAmount >= 0 && data.hidmatAmount <= 10000000 &&
+             data.reminderEnabled is bool &&
+             data.reminderTitle is string && data.reminderTitle.size() <= 150 &&
+             data.reminderMessage is string && data.reminderMessage.size() <= 500 &&
+             data.pushBlastId is int && data.pushBlastId >= 0 &&
+             data.pushTargetUserId is string && data.pushTargetUserId.size() >= 1 && data.pushTargetUserId.size() <= 128;
+    }
+
+    function isValidResident(data, residentId) {
+      return data.userId is string && data.userId == residentId && data.userId.size() <= 128 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 60 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.house is string && data.house.size() >= 1 && data.house.size() <= 40 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             data.email is string && data.email.size() >= 1 && data.email.size() <= 120 &&
+             data.role in ['admin', 'member'] &&
+             data.roleLabel is string && data.roleLabel.size() >= 1 && data.roleLabel.size() <= 60 &&
+             data.hidmatEnabled is bool;
+    }
+
+    function isValidPayment(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.month is string && data.month.size() == 7 && data.month.matches('^\\d{4}-\\d{2}$') &&
+             data.type in ['iuran', 'hidmat'] &&
+             data.amount is int && data.amount >= 0 && data.amount <= 10000000 &&
+             data.status in ['unpaid', 'pending', 'paid'] &&
+             data.dateLabel is string && data.dateLabel.size() >= 1 && data.dateLabel.size() <= 30 &&
+             data.method is string && data.method.size() >= 1 && data.method.size() <= 50 &&
+             data.note is string && data.note.size() <= 200;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.imageUrl is string && data.imageUrl.size() <= 250000 &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+             data.urgent is bool &&
+             data.published is bool &&
+             data.displayDate is string && data.displayDate.size() >= 1 && data.displayDate.size() <= 30 &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 120;
+    }
+
+    function isValidMonthlySummary(data, monthCode) {
+      return data.month is string && data.month == monthCode &&
+             data.month.size() == 7 && data.month.matches('^\\d{4}-\\d{2}$') &&
+             data.totalMembers is int && data.totalMembers >= 0 && data.totalMembers <= 10000 &&
+             data.paidIuranCount is int && data.paidIuranCount >= 0 && data.paidIuranCount <= 10000 &&
+             data.pendingCount is int && data.pendingCount >= 0 && data.pendingCount <= 10000;
+    }
+
+    function isValidAdminWebhookConfig(data) {
+      return data.webhookUrl is string && data.webhookUrl.size() <= 500 &&
+             data.webhookSecret is string && data.webhookSecret.size() <= 200 &&
+             data.relayFromAndroidEnabled is bool &&
+             data.autoVerifyWebhookEvents is bool &&
+             data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128;
+    }
+
+    function isValidDanaWebhookEvent(data, eventId) {
+      return data.referenceId is string && data.referenceId == eventId &&
+             data.referenceId.size() >= 1 && data.referenceId.size() <= 128 &&
+             data.source is string && data.source.size() >= 1 && data.source.size() <= 60 &&
+             data.amount is int && data.amount > 0 && data.amount <= 100000000 &&
+             data.senderName is string && data.senderName.size() <= 120 &&
+             data.senderPhone is string && data.senderPhone.size() <= 30 &&
+             data.houseHint is string && data.houseHint.size() <= 40 &&
+             data.monthHint is string && data.monthHint.size() <= 7 &&
+             data.paymentTypeHint is string && data.paymentTypeHint.size() <= 20 &&
+             data.rawPayload is string && data.rawPayload.size() <= 2000 &&
+             data.status in ['RECEIVED', 'AUTO_VERIFIED', 'NEED_REVIEW', 'UNMATCHED'] &&
+             data.matchedPaymentId is string && data.matchedPaymentId.size() <= 128 &&
+             data.matchedSummary is string && data.matchedSummary.size() <= 250 &&
+             data.verifiedByUid is string && data.verifiedByUid.size() <= 128;
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(uid) &&
+                       isValidAdminRecord(incoming(), uid) &&
+                       incoming().keys().hasAll(['userId', 'email', 'roleLabel', 'inviteCode', 'grantedByUid', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'roleLabel', 'inviteCode', 'grantedByUid', 'createdAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       (
+                         (
+                           isAdmin() &&
+                           incoming().grantedByUid == request.auth.uid
+                         ) ||
+                         (
+                           request.auth.uid == uid &&
+                           request.auth.token.email_verified == true &&
+                           incoming().email == request.auth.token.email &&
+                           incoming().inviteCode.size() >= 6 &&
+                           isValidId(incoming().inviteCode) &&
+                           exists(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)) &&
+                           get(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)).data.used == false &&
+                           (
+                             get(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)).data.targetEmail == '' ||
+                             get(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)).data.targetEmail == request.auth.token.email
+                           ) &&
+                           getAfter(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)).data.used == true &&
+                           getAfter(/databases/$(database)/documents/admin_invites/$(incoming().inviteCode)).data.usedByUid == request.auth.uid
+                         )
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(uid) &&
+                       isAdmin() &&
+                       isValidAdminRecord(incoming(), uid) &&
+                       incoming().userId == existing().userId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['roleLabel', 'inviteCode', 'grantedByUid']);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(uid) &&
+                       isAdmin() &&
+                       uid != request.auth.uid &&
+                       existing().email != 'kfkhoerul05@gmail.com';
+    }
+
+    match /admin_invites/{inviteCode} {
+      allow get: if isSignedIn() && isValidId(inviteCode);
+      allow list: if isAdminEmail();
+
+      allow create: if isSignedIn() &&
+                       isValidId(inviteCode) &&
+                       isValidAdminInvite(incoming(), inviteCode) &&
+                       incoming().keys().hasAll(['code', 'targetEmail', 'label', 'used', 'usedByUid', 'usedByEmail', 'createdByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['code', 'targetEmail', 'label', 'used', 'usedByUid', 'usedByEmail', 'createdByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().used == false &&
+                       incoming().usedByUid == '' &&
+                       incoming().usedByEmail == '' &&
+                       incoming().createdByUid == request.auth.uid &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isAdminEmail();
+
+      allow update: if isSignedIn() &&
+                       isValidId(inviteCode) &&
+                       isValidAdminInvite(incoming(), inviteCode) &&
+                       incoming().code == existing().code &&
+                       incoming().targetEmail == existing().targetEmail &&
+                       incoming().label == existing().label &&
+                       incoming().createdByUid == existing().createdByUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           existing().used == false &&
+                           incoming().used == true &&
+                           incoming().usedByUid == request.auth.uid &&
+                           request.auth.token.email_verified == true &&
+                           incoming().usedByEmail == request.auth.token.email &&
+                           (existing().targetEmail == '' || existing().targetEmail == request.auth.token.email) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['used', 'usedByUid', 'usedByEmail', 'updatedAt']) &&
+                           existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))
+                         ) ||
+                         isAdminEmail()
+                       );
+
+      allow delete: if isSignedIn() && isValidId(inviteCode) && isAdminEmail();
+    }
+
+    match /system_settings/{configId} {
+      allow get: if isSignedIn() && isValidId(configId) && configId == 'config';
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(configId) &&
+                       configId == 'config' &&
+                       isValidSystemSettings(incoming()) &&
+                       incoming().keys().hasAll(['blokName', 'subtitle', 'danaNumber', 'danaAccountName', 'customQrisData', 'iuranAmount', 'hidmatAmount', 'reminderEnabled', 'reminderTitle', 'reminderMessage', 'pushBlastId', 'pushTargetUserId', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['blokName', 'subtitle', 'danaNumber', 'danaAccountName', 'customQrisData', 'iuranAmount', 'hidmatAmount', 'reminderEnabled', 'reminderTitle', 'reminderMessage', 'pushBlastId', 'pushTargetUserId', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isAdmin();
+
+      allow update: if isSignedIn() &&
+                       isValidId(configId) &&
+                       configId == 'config' &&
+                       isValidSystemSettings(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['blokName', 'subtitle', 'danaNumber', 'danaAccountName', 'customQrisData', 'iuranAmount', 'hidmatAmount', 'reminderEnabled', 'reminderTitle', 'reminderMessage', 'pushBlastId', 'pushTargetUserId', 'updatedAt']) &&
+                       isAdmin();
+
+      allow delete: if false;
+    }
+
+    match /residents/{residentId} {
+      // PII Isolation: Only the resident themselves or verified Admin may read
+      allow get: if isSignedIn() && isValidId(residentId) && (request.auth.uid == residentId || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(residentId) &&
+                       isValidResident(incoming(), residentId) &&
+                       incoming().keys().hasAll(['userId', 'username', 'name', 'house', 'phone', 'email', 'role', 'roleLabel', 'hidmatEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'username', 'name', 'house', 'phone', 'email', 'role', 'roleLabel', 'hidmatEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         isAdmin() ||
+                         (request.auth.uid == residentId && existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))) ||
+                         (request.auth.uid == residentId && incoming().role == 'member' && incoming().hidmatEnabled == false)
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(residentId) &&
+                       isValidResident(incoming(), residentId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           isAdmin() &&
+                           !(existing().email == 'kfkhoerul05@gmail.com' && incoming().role != 'admin') &&
+                           !(residentId == request.auth.uid && existing().role == 'admin' && incoming().role != 'admin') &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['username', 'name', 'house', 'phone', 'role', 'roleLabel', 'hidmatEnabled', 'updatedAt'])
+                         ) ||
+                         (
+                           request.auth.uid == residentId &&
+                           incoming().hidmatEnabled == existing().hidmatEnabled &&
+                           existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['role', 'roleLabel', 'updatedAt'])
+                         ) ||
+                         (
+                           request.auth.uid == residentId &&
+                           existing().email != 'kfkhoerul05@gmail.com' &&
+                           existing().role == 'admin' &&
+                           incoming().role == 'member' &&
+                           incoming().hidmatEnabled == existing().hidmatEnabled &&
+                           !exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['role', 'roleLabel', 'updatedAt'])
+                         ) ||
+                         (
+                           request.auth.uid == residentId &&
+                           incoming().role == existing().role &&
+                           incoming().hidmatEnabled == existing().hidmatEnabled &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['username', 'name', 'house', 'phone', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidId(residentId) &&
+                       isAdmin() &&
+                       residentId != request.auth.uid &&
+                       existing().email != 'kfkhoerul05@gmail.com';
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isSignedIn() && isValidId(paymentId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(paymentId) &&
+                       isValidPayment(incoming()) &&
+                       incoming().keys().hasAll(['userId', 'month', 'type', 'amount', 'status', 'dateLabel', 'method', 'note', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'month', 'type', 'amount', 'status', 'dateLabel', 'method', 'note', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         isAdmin() ||
+                         (incoming().userId == request.auth.uid && incoming().status in ['unpaid', 'pending'] && exists(/databases/$(database)/documents/residents/$(request.auth.uid)))
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(paymentId) &&
+                       isValidPayment(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().month == existing().month &&
+                       incoming().type == existing().type &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'updatedAt'])
+                         ) ||
+                         (
+                           incoming().userId == request.auth.uid &&
+                           (
+                             existing().status == 'unpaid' ||
+                             (existing().status == 'pending' && existing().method == 'Tagihan Otomatis')
+                           ) &&
+                           incoming().status == 'pending' &&
+                           incoming().method != 'Tagihan Otomatis' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(paymentId) && isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get: if isSignedIn() && isValidId(announcementId) && (existing().published == true || isAdmin());
+      allow list: if isSignedIn() && (resource.data.published == true || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(announcementId) &&
+                       isValidAnnouncement(incoming()) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().keys().hasAll(['title', 'category', 'imageUrl', 'content', 'urgent', 'published', 'displayDate', 'authorId', 'authorName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'category', 'imageUrl', 'content', 'urgent', 'published', 'displayDate', 'authorId', 'authorName', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isAdmin();
+
+      allow update: if isSignedIn() &&
+                       isValidId(announcementId) &&
+                       isValidAnnouncement(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'imageUrl', 'content', 'urgent', 'published', 'displayDate', 'authorName', 'updatedAt']) &&
+                       isAdmin();
+
+      allow delete: if isSignedIn() && isValidId(announcementId) && isAdmin();
+    }
+
+    match /monthly_summaries/{monthCode} {
+      allow get: if isSignedIn() && isValidId(monthCode);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(monthCode) &&
+                       isValidMonthlySummary(incoming(), monthCode) &&
+                       incoming().keys().hasAll(['month', 'totalMembers', 'paidIuranCount', 'pendingCount', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['month', 'totalMembers', 'paidIuranCount', 'pendingCount', 'updatedAt']) &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isAdmin();
+
+      allow update: if isSignedIn() &&
+                       isValidId(monthCode) &&
+                       isValidMonthlySummary(incoming(), monthCode) &&
+                       incoming().month == existing().month &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['totalMembers', 'paidIuranCount', 'pendingCount', 'updatedAt']) &&
+                       isAdmin();
+
+      allow delete: if false;
+    }
+
+    match /admin_configs/{configId} {
+      allow get: if isSignedIn() && isValidId(configId) && configId == 'dana_webhook' && isAdmin();
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(configId) &&
+                       configId == 'dana_webhook' &&
+                       isAdmin() &&
+                       isValidAdminWebhookConfig(incoming()) &&
+                       incoming().keys().hasAll(['webhookUrl', 'webhookSecret', 'relayFromAndroidEnabled', 'autoVerifyWebhookEvents', 'updatedByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['webhookUrl', 'webhookSecret', 'relayFromAndroidEnabled', 'autoVerifyWebhookEvents', 'updatedByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidId(configId) &&
+                       configId == 'dana_webhook' &&
+                       isAdmin() &&
+                       isValidAdminWebhookConfig(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['webhookUrl', 'webhookSecret', 'relayFromAndroidEnabled', 'autoVerifyWebhookEvents', 'updatedByUid', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /dana_webhook_events/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && isAdmin();
+      allow list: if isSignedIn() && isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(eventId) &&
+                       isAdmin() &&
+                       isValidDanaWebhookEvent(incoming(), eventId) &&
+                       incoming().keys().hasAll(['referenceId', 'source', 'amount', 'senderName', 'senderPhone', 'houseHint', 'monthHint', 'paymentTypeHint', 'rawPayload', 'status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['referenceId', 'source', 'amount', 'senderName', 'senderPhone', 'houseHint', 'monthHint', 'paymentTypeHint', 'rawPayload', 'status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidId(eventId) &&
+                       isAdmin() &&
+                       isValidDanaWebhookEvent(incoming(), eventId) &&
+                       incoming().referenceId == existing().referenceId &&
+                       incoming().source == existing().source &&
+                       incoming().amount == existing().amount &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(eventId) && isAdmin();
+    }
+  }
+}
