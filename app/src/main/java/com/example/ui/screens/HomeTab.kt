@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,20 +37,27 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.DuesStatus
 import com.example.data.model.computeMonthSummary
-import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
+import com.example.ui.components.AnimatedRupiahText
+import com.example.ui.components.StaggeredEntrance
 import com.example.ui.components.StatusBadge
+import com.example.ui.components.pressScale
 import com.example.ui.theme.Amber600
 import com.example.ui.theme.Emerald100
 import com.example.ui.theme.Emerald500
@@ -85,65 +96,74 @@ fun HomeTab(
         val ms = state.monthlySummary
         (ms?.paidIuranCount?.toInt() ?: 0) to (ms?.totalMembers?.toInt() ?: 0)
     }
-    val progress = if (totalMembers > 0) paidCount.toFloat() / totalMembers.toFloat() else 0f
-    val pct = (progress * 100).toInt()
+    val rawProgress = if (totalMembers > 0) paidCount.toFloat() / totalMembers.toFloat() else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = rawProgress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 720, easing = FastOutSlowInEasing),
+        label = "home_progress"
+    )
+    val pct = (animatedProgress * 100).toInt()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (resident.needsProfileCompletion) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Amber600),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            StaggeredEntrance(delayMillis = 0) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Amber600),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Lengkapi Profil Anda",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "Isi nomor rumah & nomor HP aktif Anda.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.92f)
-                        )
-                    }
-                    Button(
-                        onClick = { onNavigateTab(MainTab.ACCOUNT) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Amber600
-                        ),
-                        shape = RoundedCornerShape(14.dp),
+                    Row(
                         modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .testTag("complete_profile_cta")
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Isi", fontWeight = FontWeight.ExtraBold)
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Lengkapi Profil Anda",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "Isi nomor rumah & nomor HP aktif Anda.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.92f)
+                            )
+                        }
+                        Button(
+                            onClick = { onNavigateTab(MainTab.ACCOUNT) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Amber600
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("complete_profile_cta")
+                        ) {
+                            Text("Isi", fontWeight = FontWeight.ExtraBold)
+                        }
                     }
                 }
             }
         }
 
         // Main Resident Status & Progress Card
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200)
-        ) {
+        StaggeredEntrance(delayMillis = 40) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Slate200),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -240,10 +260,18 @@ fun HomeTab(
                 }
 
                 // Community Progress Bar
-                Surface(
-                    color = Slate900,
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Slate900)
+                        .drawBehind {
+                            drawCircle(
+                                color = Emerald500.copy(alpha = 0.16f),
+                                radius = size.maxDimension * 0.45f,
+                                center = Offset(size.width * 0.92f, size.height * 0.15f)
+                            )
+                        }
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
@@ -267,9 +295,10 @@ fun HomeTab(
                             )
                         }
                         LinearProgressIndicator(
-                            progress = { progress },
+                            progress = { animatedProgress },
                             color = Emerald500,
                             trackColor = Color.White.copy(alpha = 0.16f),
+                            strokeCap = StrokeCap.Round,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)
@@ -288,8 +317,10 @@ fun HomeTab(
                 }
             }
         }
+        }
 
         // Billing Status Banner
+        StaggeredEntrance(delayMillis = 100) {
         if (summary.overall != DuesStatus.PAID) {
             Card(
                 shape = RoundedCornerShape(24.dp),
@@ -393,14 +424,18 @@ fun HomeTab(
                 }
             }
         }
+        }
 
         // Latest Announcement Preview
         val latest = state.announcements.firstOrNull()
         if (latest != null) {
+            val previewInteraction = remember { MutableInteractionSource() }
+            StaggeredEntrance(delayMillis = 160) {
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200)
+                border = BorderStroke(1.dp, Slate200),
+                modifier = Modifier.pressScale(previewInteraction)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -442,7 +477,10 @@ fun HomeTab(
                         border = BorderStroke(1.dp, Slate200),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onNavigateTab(MainTab.INFO) }
+                            .clickable(
+                                interactionSource = previewInteraction,
+                                indication = null
+                            ) { onNavigateTab(MainTab.INFO) }
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
@@ -465,6 +503,7 @@ fun HomeTab(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -492,11 +531,12 @@ private fun DuesInfoMiniCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = Slate500
             )
-            Text(
-                text = formatRupiah(amount),
+            AnimatedRupiahText(
+                targetAmount = amount,
                 style = MaterialTheme.typography.titleSmall,
                 color = Slate900,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.ExtraBold,
+                useMonospace = true
             )
             StatusBadge(status = status)
         }

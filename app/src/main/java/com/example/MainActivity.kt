@@ -8,6 +8,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -87,6 +94,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -123,6 +132,7 @@ import com.example.data.remote.authStateFlow
 import com.example.data.remote.signOut
 import com.example.data.repository.BlokCeRepository
 import com.example.data.repository.ConnectivityObserver
+import com.example.ui.components.LivePulseDot
 import com.example.ui.components.QrisZoomDialog
 import com.example.ui.components.ReminderBlastDialog
 import com.example.ui.screens.AccountTab
@@ -413,107 +423,120 @@ private fun AuthenticatedShell(
                                 onSelectMonth = viewModel::selectMonth
                             )
 
-                            when (state.activeTab) {
-                                MainTab.HOME -> HomeTab(
-                                    state = state,
-                                    onNavigateTab = viewModel::selectTab,
-                                    onOpenQrisScanner = viewModel::openQrisScanner
-                                )
-                                MainTab.PAY -> PayTab(
-                                    state = state,
-                                    onSelectPackage = viewModel::selectPayPackage,
-                                    onCopyDana = { num ->
-                                        copyToClipboard(context, "Nomor DANA", num)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Nomor DANA $num disalin!")
-                                        }
-                                    },
-                                    onOpenDanaApp = { num ->
-                                        copyToClipboard(context, "Nomor DANA", num)
-                                        val launched = DanaLiveBridge.openDanaApp(context)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                if (launched) {
-                                                    "Nomor DANA $num disalin & membuka aplikasi DANA..."
-                                                } else {
-                                                    "Nomor DANA $num disalin. Membuka halaman DANA di Play Store."
+                            AnimatedContent(
+                                targetState = state.activeTab,
+                                transitionSpec = {
+                                    val forward = targetState.ordinal >= initialState.ordinal
+                                    (fadeIn(tween(220)) + slideInHorizontally(tween(240)) { w ->
+                                        if (forward) w / 10 else -w / 10
+                                    }) togetherWith (fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { w ->
+                                        if (forward) -w / 12 else w / 12
+                                    })
+                                },
+                                label = "main_tab_transition"
+                            ) { activeTab ->
+                                when (activeTab) {
+                                    MainTab.HOME -> HomeTab(
+                                        state = state,
+                                        onNavigateTab = viewModel::selectTab,
+                                        onOpenQrisScanner = viewModel::openQrisScanner
+                                    )
+                                    MainTab.PAY -> PayTab(
+                                        state = state,
+                                        onSelectPackage = viewModel::selectPayPackage,
+                                        onCopyDana = { num ->
+                                            copyToClipboard(context, "Nomor DANA", num)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Nomor DANA $num disalin!")
+                                            }
+                                        },
+                                        onOpenDanaApp = { num ->
+                                            copyToClipboard(context, "Nomor DANA", num)
+                                            val launched = DanaLiveBridge.openDanaApp(context)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    if (launched) {
+                                                        "Nomor DANA $num disalin & membuka aplikasi DANA..."
+                                                    } else {
+                                                        "Nomor DANA $num disalin. Membuka halaman DANA di Play Store."
+                                                    }
+                                                )
+                                            }
+                                        },
+                                        onOpenQrisZoom = viewModel::openQrisZoom,
+                                        onOpenQrisScanner = viewModel::openQrisScanner,
+                                        onClearScannedQris = viewModel::clearScannedQris,
+                                        onSubmitPayment = viewModel::submitPayment
+                                    )
+                                    MainTab.INFO -> InfoTab(
+                                        state = state,
+                                        onSaveAnnouncement = viewModel::adminSaveAnnouncement,
+                                        onDeleteAnnouncement = viewModel::adminDeleteAnnouncement
+                                    )
+                                    MainTab.ADMIN_WARGA -> {
+                                        if (isAdmin) {
+                                            AdminWargaTab(
+                                                state = state,
+                                                onSetFilter = viewModel::setAdminFilter,
+                                                onSetSearch = viewModel::setAdminSearch,
+                                                onVerifyPayment = viewModel::adminVerifyPayment,
+                                                onRejectPayment = viewModel::adminRejectPayment,
+                                                onMarkPaid = viewModel::adminMarkPaid,
+                                                onToggleHidmat = viewModel::adminToggleHidmat,
+                                                onEditResidentProfile = viewModel::adminEditResidentProfile,
+                                                onSetResidentRole = viewModel::adminSetResidentRole,
+                                                onDeleteResident = viewModel::adminDeleteResident,
+                                                onSaveSettings = viewModel::adminSaveSettings,
+                                                onNavigateToInfo = { viewModel.selectTab(MainTab.INFO) },
+                                                onPushBlast = { viewModel.adminSendPushBlast("all_unpaid") },
+                                                onToggleReminder = viewModel::adminToggleReminder,
+                                                onGenerateMonthlyBills = viewModel::adminGenerateMonthlyBills,
+                                                onToggleDanaAutoVerify = viewModel::setDanaAutoVerifyEnabled,
+                                                onVerifyLiveDanaManual = viewModel::adminVerifyLiveDanaManual,
+                                                onClearDanaLiveEvents = viewModel::adminClearDanaLiveEvents,
+                                                onSaveWebhookConfig = viewModel::adminSaveWebhookConfig,
+                                                onTestWebhookPing = viewModel::adminTestWebhookPing,
+                                                onVerifyWebhookEventManual = viewModel::adminVerifyWebhookEventManual,
+                                                onDeleteWebhookEvent = viewModel::adminDeleteWebhookEvent,
+                                                onBuildCsv = viewModel::buildMonthlyCsv,
+                                                onBuildFundRecapCsv = viewModel::buildFundRecapCsv,
+                                                onShowMessage = { msg ->
+                                                    scope.launch { snackbarHostState.showSnackbar(msg) }
                                                 }
                                             )
+                                        } else {
+                                            HomeTab(
+                                                state = state,
+                                                onNavigateTab = viewModel::selectTab,
+                                                onOpenQrisScanner = viewModel::openQrisScanner
+                                            )
                                         }
-                                    },
-                                    onOpenQrisZoom = viewModel::openQrisZoom,
-                                    onOpenQrisScanner = viewModel::openQrisScanner,
-                                    onClearScannedQris = viewModel::clearScannedQris,
-                                    onSubmitPayment = viewModel::submitPayment
-                                )
-                                MainTab.INFO -> InfoTab(
-                                    state = state,
-                                    onSaveAnnouncement = viewModel::adminSaveAnnouncement,
-                                    onDeleteAnnouncement = viewModel::adminDeleteAnnouncement
-                                )
-                                MainTab.ADMIN_WARGA -> {
-                                    if (isAdmin) {
-                                        AdminWargaTab(
-                                            state = state,
-                                            onSetFilter = viewModel::setAdminFilter,
-                                            onSetSearch = viewModel::setAdminSearch,
-                                            onVerifyPayment = viewModel::adminVerifyPayment,
-                                            onRejectPayment = viewModel::adminRejectPayment,
-                                            onMarkPaid = viewModel::adminMarkPaid,
-                                            onToggleHidmat = viewModel::adminToggleHidmat,
-                                            onEditResidentProfile = viewModel::adminEditResidentProfile,
-                                            onSetResidentRole = viewModel::adminSetResidentRole,
-                                            onDeleteResident = viewModel::adminDeleteResident,
-                                            onSaveSettings = viewModel::adminSaveSettings,
-                                            onNavigateToInfo = { viewModel.selectTab(MainTab.INFO) },
-                                            onPushBlast = { viewModel.adminSendPushBlast("all_unpaid") },
-                                            onToggleReminder = viewModel::adminToggleReminder,
-                                            onGenerateMonthlyBills = viewModel::adminGenerateMonthlyBills,
-                                            onToggleDanaAutoVerify = viewModel::setDanaAutoVerifyEnabled,
-                                            onVerifyLiveDanaManual = viewModel::adminVerifyLiveDanaManual,
-                                            onClearDanaLiveEvents = viewModel::adminClearDanaLiveEvents,
-                                            onSaveWebhookConfig = viewModel::adminSaveWebhookConfig,
-                                            onTestWebhookPing = viewModel::adminTestWebhookPing,
-                                            onVerifyWebhookEventManual = viewModel::adminVerifyWebhookEventManual,
-                                            onDeleteWebhookEvent = viewModel::adminDeleteWebhookEvent,
-                                            onBuildCsv = viewModel::buildMonthlyCsv,
-                                            onBuildFundRecapCsv = viewModel::buildFundRecapCsv,
-                                            onShowMessage = { msg ->
-                                                scope.launch { snackbarHostState.showSnackbar(msg) }
+                                    }
+                                    MainTab.ACCOUNT -> AccountTab(
+                                        state = state,
+                                        onSaveProfile = viewModel::updateOwnProfile,
+                                        onSaveSettings = viewModel::adminSaveSettings,
+                                        onCreateAdminInvite = viewModel::adminCreateInvite,
+                                        onDeleteAdminInvite = viewModel::adminDeleteInvite,
+                                        onRevokeDelegatedAdmin = viewModel::adminRevokeDelegatedAdmin,
+                                        onRedeemAdminInvite = viewModel::redeemAdminInvite,
+                                        onCopyText = { label, text ->
+                                            copyToClipboard(context, label, text)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("$label $text disalin!")
                                             }
-                                        )
-                                    } else {
-                                        HomeTab(
-                                            state = state,
-                                            onNavigateTab = viewModel::selectTab,
-                                            onOpenQrisScanner = viewModel::openQrisScanner
-                                        )
-                                    }
-                                }
-                                MainTab.ACCOUNT -> AccountTab(
-                                    state = state,
-                                    onSaveProfile = viewModel::updateOwnProfile,
-                                    onSaveSettings = viewModel::adminSaveSettings,
-                                    onCreateAdminInvite = viewModel::adminCreateInvite,
-                                    onDeleteAdminInvite = viewModel::adminDeleteInvite,
-                                    onRevokeDelegatedAdmin = viewModel::adminRevokeDelegatedAdmin,
-                                    onRedeemAdminInvite = viewModel::redeemAdminInvite,
-                                    onCopyText = { label, text ->
-                                        copyToClipboard(context, label, text)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("$label $text disalin!")
+                                        },
+                                        onFlushOfflineQueue = viewModel::flushOfflineNow,
+                                        onSignOut = {
+                                            onSignOutRequested(false)
+                                            signOut(
+                                                credentialManager = credentialManager,
+                                                scope = scope,
+                                                onBeforeSignOut = { viewModel.clearCachesBeforeSignOut() }
+                                            )
                                         }
-                                    },
-                                    onFlushOfflineQueue = viewModel::flushOfflineNow,
-                                    onSignOut = {
-                                        onSignOutRequested(false)
-                                        signOut(
-                                            credentialManager = credentialManager,
-                                            scope = scope,
-                                            onBeforeSignOut = { viewModel.clearCachesBeforeSignOut() }
-                                        )
-                                    }
-                                )
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -644,10 +667,22 @@ private fun TopBlokHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
             .background(
-                Brush.linearGradient(listOf(Emerald950, Emerald800, Teal800)),
-                RoundedCornerShape(26.dp)
+                Brush.linearGradient(listOf(Emerald950, Emerald800, Teal800))
             )
+            .drawBehind {
+                drawCircle(
+                    color = Emerald500.copy(alpha = 0.22f),
+                    radius = size.maxDimension * 0.42f,
+                    center = Offset(size.width * 0.94f, size.height * 0.1f)
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.06f),
+                    radius = size.maxDimension * 0.26f,
+                    center = Offset(size.width * 0.1f, size.height * 0.95f)
+                )
+            }
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -688,11 +723,9 @@ private fun TopBlokHeader(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (state.isOnline) Emerald500 else Amber600)
+                            LivePulseDot(
+                                color = if (state.isOnline) Emerald500 else Amber600,
+                                size = 6.dp
                             )
                         }
                         Text(

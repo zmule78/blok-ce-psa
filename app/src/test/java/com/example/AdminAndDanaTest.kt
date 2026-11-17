@@ -9,7 +9,9 @@ import com.example.data.model.PRIMARY_ADMIN_EMAIL
 import com.example.data.model.Payment
 import com.example.data.model.Resident
 import com.example.data.model.SystemSettings
+import com.example.data.model.computeAdminDashboardAnalytics
 import com.example.data.model.computeFundRecap
+import com.example.data.model.formatCompactRupiah
 import com.example.data.model.resolveAdminStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -181,5 +183,50 @@ class AdminAndDanaTest {
         assertTrue(cfg.autoVerifyWebhookEvents)
         val ev = DanaWebhookEvent(referenceId = "REF-1", amount = 50000L)
         assertEquals("RECEIVED", ev.status)
+    }
+
+    @Test
+    fun computeAdminDashboardAnalytics_buildsMonthlyTrendsAndCompactFormatting() {
+        val settings = SystemSettings(iuranAmount = 50000L, hidmatAmount = 25000L)
+        val residents = listOf(
+            Resident(id = "admin", userId = "admin", role = "admin"),
+            Resident(id = "w1", userId = "w1", role = "member", hidmatEnabled = true),
+            Resident(id = "w2", userId = "w2", role = "member", hidmatEnabled = false)
+        )
+        val payments = listOf(
+            Payment(id = "p1", userId = "w1", month = "2026-10", type = "iuran", amount = 50000L, status = "paid", method = "DANA"),
+            Payment(id = "p2", userId = "w1", month = "2026-11", type = "iuran", amount = 50000L, status = "paid", method = "DANA"),
+            Payment(id = "p3", userId = "w1", month = "2026-11", type = "hidmat", amount = 25000L, status = "paid", method = "DANA"),
+            Payment(id = "p4", userId = "w2", month = "2026-11", type = "iuran", amount = 50000L, status = "unpaid", method = AUTO_BILL_METHOD)
+        )
+
+        val analytics6m = computeAdminDashboardAnalytics(
+            selectedMonth = "2026-11",
+            residents = residents,
+            payments = payments,
+            settings = settings,
+            monthWindowSize = 6
+        )
+        assertEquals(6, analytics6m.monthlyTrends.size)
+        assertEquals(75000L, analytics6m.selectedMonthRecap.totalCollectedMonth)
+        assertEquals(50000L, analytics6m.totalUnpaidSelectedMonth)
+        assertEquals(125000L, analytics6m.totalCollectedAllTime)
+        val novPoint = analytics6m.monthlyTrends.first { it.monthCode == "2026-11" }
+        assertEquals(75000L, novPoint.totalPaid)
+        assertEquals(50000L, novPoint.unpaidAmount)
+
+        val analytics12m = computeAdminDashboardAnalytics(
+            selectedMonth = "2026-11",
+            residents = residents,
+            payments = payments,
+            settings = settings,
+            monthWindowSize = 12
+        )
+        assertEquals(12, analytics12m.monthlyTrends.size)
+        assertEquals("2026-01", analytics12m.monthlyTrends.first().monthCode)
+        assertEquals("2026-12", analytics12m.monthlyTrends.last().monthCode)
+
+        assertEquals("Rp50rb", formatCompactRupiah(50000L))
+        assertEquals("Rp1.5jt", formatCompactRupiah(1500000L))
     }
 }

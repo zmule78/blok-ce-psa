@@ -21,6 +21,12 @@ val InterFamily = FontFamily(
     Font(R.font.inter, FontWeight.Bold)
 )
 
+val JetBrainsMonoFamily = FontFamily(
+    Font(R.font.jetbrains_mono, FontWeight.Normal),
+    Font(R.font.jetbrains_mono, FontWeight.Medium),
+    Font(R.font.jetbrains_mono, FontWeight.Bold)
+)
+
 val AppTypography = Typography(
     headlineMedium = TextStyle(
         fontFamily = PlusJakartaSansFamily,
