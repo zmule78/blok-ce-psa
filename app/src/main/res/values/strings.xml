@@ -9,4 +9,12 @@
     <string name="camera_permission_settings_cta">Buka Pengaturan</string>
     <string name="qris_scanner_close_cd">Tutup pemindai QRIS</string>
     <string name="qris_scanner_torch_cd">Nyalakan atau matikan lampu kilat</string>
+    <string name="biometric_portal_title">Buka Portal Blok CE PSA</string>
+    <string name="biometric_portal_subtitle">Gunakan Sidik Jari, Wajah, atau kunci layar untuk masuk</string>
+    <string name="biometric_payment_title">Konfirmasi Pembayaran Warga</string>
+    <string name="biometric_payment_subtitle">Verifikasi identitas Anda sebelum mengirim konfirmasi</string>
+    <string name="biometric_toggle_title">Verifikasi Keamanan Biometrik</string>
+    <string name="biometric_toggle_subtitle">Konfirmasi Sidik Jari atau Wajah untuk mengubah kunci portal</string>
+    <string name="biometric_negative_cancel">Batal</string>
+    <string name="biometric_emblem_cd">Ikon keamanan sidik jari dan wajah</string>
 </resources>

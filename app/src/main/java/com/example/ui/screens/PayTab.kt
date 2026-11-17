@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Send
@@ -85,6 +86,8 @@ fun PayTab(
     onOpenQrisZoom: () -> Unit,
     onOpenQrisScanner: () -> Unit,
     onClearScannedQris: () -> Unit,
+    requireBiometricConfirm: Boolean = false,
+    onRequestBiometricForPayment: (amount: Long, onVerified: () -> Unit) -> Unit = { _, onVerified -> onVerified() },
     onSubmitPayment: (method: String, note: String) -> Unit
 ) {
     val resident = state.currentResident ?: return
@@ -423,10 +426,47 @@ fun PayTab(
                         .testTag("payment_note_input")
                 )
 
+                if (requireBiometricConfirm) {
+                    Surface(
+                        color = Emerald50,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Emerald100),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Fingerprint,
+                                contentDescription = null,
+                                tint = Emerald700,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Pembayaran ini memerlukan verifikasi sidik jari / wajah.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Emerald700,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
                 Button(
                     onClick = {
-                        onSubmitPayment(selectedMethod, note)
-                        note = ""
+                        val methodSnapshot = selectedMethod
+                        val noteSnapshot = note
+                        if (requireBiometricConfirm) {
+                            onRequestBiometricForPayment(totalSelected) {
+                                onSubmitPayment(methodSnapshot, noteSnapshot)
+                                note = ""
+                            }
+                        } else {
+                            onSubmitPayment(methodSnapshot, noteSnapshot)
+                            note = ""
+                        }
                     },
                     enabled = (canIuran || canHidmat) && totalSelected > 0 && !state.isMutating,
                     colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
@@ -437,9 +477,9 @@ fun PayTab(
                         .testTag("submit_payment_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Send,
+                        imageVector = if (requireBiometricConfirm) Icons.Filled.Fingerprint else Icons.Filled.Send,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(

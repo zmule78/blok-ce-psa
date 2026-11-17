@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
@@ -54,12 +55,15 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.DuesStatus
 import com.example.data.model.computeMonthSummary
 import com.example.data.model.monthLabel
+import com.example.security.BiometricAvailability
+import com.example.security.BiometricSecurityState
 import com.example.ui.components.AnimatedRupiahText
 import com.example.ui.components.StaggeredEntrance
 import com.example.ui.components.StatusBadge
 import com.example.ui.components.pressScale
 import com.example.ui.theme.Amber600
 import com.example.ui.theme.Emerald100
+import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
@@ -79,6 +83,9 @@ import com.example.ui.viewmodel.MainUiState
 @Composable
 fun HomeTab(
     state: MainUiState,
+    biometricState: BiometricSecurityState = BiometricSecurityState(),
+    onEnableBiometricClick: () -> Unit = {},
+    onDismissBiometricPromo: () -> Unit = {},
     onNavigateTab: (MainTab) -> Unit,
     onOpenQrisScanner: () -> Unit
 ) {
@@ -150,6 +157,74 @@ fun HomeTab(
                                 .testTag("complete_profile_cta")
                         ) {
                             Text("Isi", fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (biometricState.availability == BiometricAvailability.AVAILABLE &&
+            !biometricState.portalLockEnabled &&
+            !biometricState.homePromoDismissed
+        ) {
+            StaggeredEntrance(delayMillis = 20) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Emerald50),
+                    border = BorderStroke(1.dp, Emerald100),
+                    modifier = Modifier.testTag("home_biometric_promo_card")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            color = Emerald700,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.Fingerprint,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Lindungi Portal dengan Biometrik",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Slate900,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "Aktifkan Sidik Jari / Wajah untuk akses lebih aman.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate600
+                            )
+                        }
+                        TextButton(
+                            onClick = onDismissBiometricPromo,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("home_dismiss_biometric_button")
+                        ) {
+                            Text("Nanti", color = Slate500)
+                        }
+                        Button(
+                            onClick = onEnableBiometricClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("home_enable_biometric_button")
+                        ) {
+                            Text("Aktifkan", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

@@ -23,8 +23,11 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,6 +40,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.model.SystemSettings
+import com.example.security.BiometricAvailability
+import com.example.security.BiometricSecurityState
 import com.example.ui.components.uriToCompressedDataUri
 import com.example.data.repository.BlokCeRepository
 import com.example.ui.theme.Amber600
@@ -84,6 +91,11 @@ fun AccountTab(
     onRedeemAdminInvite: (code: String) -> Unit,
     onCopyText: (label: String, text: String) -> Unit,
     onFlushOfflineQueue: () -> Unit,
+    biometricState: BiometricSecurityState,
+    onTogglePortalBiometric: (Boolean) -> Unit,
+    onTogglePaymentBiometric: (Boolean) -> Unit,
+    onLockPortalNow: () -> Unit,
+    onOpenBiometricEnroll: () -> Unit,
     onSignOut: () -> Unit
 ) {
     val resident = state.currentResident ?: return
@@ -237,6 +249,15 @@ fun AccountTab(
                 }
             }
         }
+
+        // Biometric Security Card (Fingerprint / FaceID)
+        BiometricSecuritySettingsCard(
+            biometricState = biometricState,
+            onTogglePortalBiometric = onTogglePortalBiometric,
+            onTogglePaymentBiometric = onTogglePaymentBiometric,
+            onLockPortalNow = onLockPortalNow,
+            onOpenBiometricEnroll = onOpenBiometricEnroll
+        )
 
         // Admin System Settings Form
         if (resident.adminRole) {
@@ -763,3 +784,215 @@ fun AccountTab(
         }
     }
 }
+
+@Composable
+private fun BiometricSecuritySettingsCard(
+    biometricState: BiometricSecurityState,
+    onTogglePortalBiometric: (Boolean) -> Unit,
+    onTogglePaymentBiometric: (Boolean) -> Unit,
+    onLockPortalNow: () -> Unit,
+    onOpenBiometricEnroll: () -> Unit
+) {
+    val isAvailable = biometricState.availability == BiometricAvailability.AVAILABLE
+    val (statusLabel, statusBg, statusFg) = when {
+        isAvailable && biometricState.portalLockEnabled -> Triple("Aktif", Emerald100, Emerald700)
+        isAvailable -> Triple("Siap Diaktifkan", Emerald50, Emerald700)
+        biometricState.availability == BiometricAvailability.NONE_ENROLLED -> Triple("Belum Terdaftar", Color(0xFFFEF3C7), Amber600)
+        else -> Triple("Tidak Didukung", Slate100, Slate500)
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Slate200),
+        modifier = Modifier.testTag("biometric_security_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        color = Emerald50,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.Fingerprint,
+                                contentDescription = null,
+                                tint = Emerald700,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = "Keamanan Biometrik",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Slate900
+                        )
+                        Text(
+                            text = "Sidik Jari / Pengenalan Wajah",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate500
+                        )
+                    }
+                }
+                Surface(
+                    color = statusBg,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = statusLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = statusFg,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            if (biometricState.availability == BiometricAvailability.NONE_ENROLLED) {
+                Surface(
+                    color = Slate50,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Slate200),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Perangkat mendukung sensor biometrik, namun belum ada sidik jari atau wajah yang didaftarkan di Setelan.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate500
+                        )
+                        OutlinedButton(
+                            onClick = onOpenBiometricEnroll,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .testTag("enroll_biometric_button")
+                        ) {
+                            Icon(Icons.Filled.Settings, null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Daftarkan Sidik Jari / Wajah", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else if (biometricState.availability == BiometricAvailability.NO_HARDWARE ||
+                biometricState.availability == BiometricAvailability.TEMPORARILY_UNAVAILABLE
+            ) {
+                Text(
+                    text = if (biometricState.availability == BiometricAvailability.TEMPORARILY_UNAVAILABLE) {
+                        "Sensor biometrik sedang sibuk atau belum tersedia sementara."
+                    } else {
+                        "Perangkat ini tidak memiliki sensor sidik jari atau wajah yang kompatibel."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Slate500
+                )
+            }
+
+            HorizontalDivider(color = Slate100)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Kunci Portal Warga",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Slate900
+                    )
+                    Text(
+                        text = "Minta sidik jari / wajah saat membuka aplikasi atau kembali dari latar belakang.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Switch(
+                    checked = biometricState.portalLockEnabled,
+                    onCheckedChange = onTogglePortalBiometric,
+                    enabled = isAvailable || biometricState.portalLockEnabled,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Emerald700
+                    ),
+                    modifier = Modifier.testTag("toggle_biometric_portal_lock")
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Verifikasi Saat Pembayaran",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Slate900
+                    )
+                    Text(
+                        text = "Konfirmasi biometrik sebelum mengirim bukti pembayaran iuran.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Switch(
+                    checked = biometricState.requireOnPayment,
+                    onCheckedChange = onTogglePaymentBiometric,
+                    enabled = isAvailable || biometricState.requireOnPayment,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Emerald700
+                    ),
+                    modifier = Modifier.testTag("toggle_biometric_payment_confirm")
+                )
+            }
+
+            if (isAvailable && biometricState.portalLockEnabled) {
+                OutlinedButton(
+                    onClick = onLockPortalNow,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Emerald700.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("lock_portal_now_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = Emerald700,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Kunci Portal Sekarang",
+                        color = Emerald700,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+    }
+}
+

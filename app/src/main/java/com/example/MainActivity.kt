@@ -4,17 +4,19 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -126,12 +128,17 @@ import com.example.data.model.MIN_BILLING_YEAR
 import com.example.data.model.computeMonthSummary
 import com.example.data.model.currentBillingPeriodCode
 import com.example.data.model.formatPeriodCode
+import com.example.data.model.formatRupiah
 import com.example.data.model.monthNameOnly
 import com.example.data.model.parsePeriodCode
 import com.example.data.remote.authStateFlow
 import com.example.data.remote.signOut
 import com.example.data.repository.BlokCeRepository
 import com.example.data.repository.ConnectivityObserver
+import com.example.security.BiometricAuthHelper
+import com.example.security.BiometricAvailability
+import com.example.security.BiometricSecurityState
+import com.example.ui.components.BiometricLockOverlay
 import com.example.ui.components.LivePulseDot
 import com.example.ui.components.QrisZoomDialog
 import com.example.ui.components.ReminderBlastDialog
@@ -168,7 +175,7 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MonthlyBillingScheduler.ensureMonthlyBillingScheduled(applicationContext)
@@ -259,10 +266,200 @@ private fun AuthenticatedShell(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner) {
+    var biometricState by remember(currentUserId) {
+        val avail = BiometricAuthHelper.checkAvailability(context)
+        val portalEnabled = BiometricAuthHelper.isPortalLockEnabled(context, currentUserId)
+        val payEnabled = BiometricAuthHelper.isPaymentBiometricEnabled(context, currentUserId)
+        val promoDismissed = BiometricAuthHelper.isHomePromoDismissed(context, currentUserId)
+        mutableStateOf(
+            BiometricSecurityState(
+                availability = avail,
+                portalLockEnabled = portalEnabled,
+                requireOnPayment = payEnabled,
+                isPortalLocked = portalEnabled && avail == BiometricAvailability.AVAILABLE,
+                homePromoDismissed = promoDismissed
+            )
+        )
+    }
+    var isBiometricPromptActive by remember { mutableStateOf(false) }
+    var lastBackgroundElapsedMs by remember { mutableStateOf(0L) }
+
+    fun triggerPortalUnlockPrompt() {
+        if (isBiometricPromptActive) return
+        val avail = BiometricAuthHelper.checkAvailability(context)
+        if (avail != BiometricAvailability.AVAILABLE) {
+            biometricState = biometricState.copy(
+                availability = avail,
+                isPortalLocked = false,
+                lastErrorMessage = null
+            )
+            return
+        }
+        BiometricAuthHelper.authenticate(
+            context = context,
+            title = context.getString(R.string.biometric_portal_title),
+            subtitle = context.getString(R.string.biometric_portal_subtitle),
+            negativeButtonText = context.getString(R.string.biometric_negative_cancel),
+            onPromptShown = { isBiometricPromptActive = true },
+            onPromptFinished = { isBiometricPromptActive = false },
+            onSuccess = {
+                biometricState = biometricState.copy(
+                    isPortalLocked = false,
+                    lastErrorMessage = null
+                )
+            },
+            onError = { _, msg ->
+                biometricState = biometricState.copy(lastErrorMessage = msg)
+            }
+        )
+    }
+
+    fun handleTogglePortalBiometric(enable: Boolean) {
+        val avail = BiometricAuthHelper.checkAvailability(context)
+        biometricState = biometricState.copy(availability = avail)
+        if (enable) {
+            if (avail == BiometricAvailability.NONE_ENROLLED) {
+                BiometricAuthHelper.openBiometricEnrollSettings(context)
+                scope.launch {
+                    snackbarHostState.showSnackbar("Daftarkan sidik jari atau wajah di Setelan perangkat terlebih dahulu.")
+                }
+                return
+            }
+            if (avail != BiometricAvailability.AVAILABLE) {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Sensor biometrik tidak tersedia di perangkat ini.")
+                }
+                return
+            }
+            BiometricAuthHelper.authenticate(
+                context = context,
+                title = context.getString(R.string.biometric_toggle_title),
+                subtitle = "Aktifkan Kunci Portal Warga Blok CE PSA",
+                negativeButtonText = context.getString(R.string.biometric_negative_cancel),
+                onPromptShown = { isBiometricPromptActive = true },
+                onPromptFinished = { isBiometricPromptActive = false },
+                onSuccess = {
+                    BiometricAuthHelper.setPortalLockEnabled(context, currentUserId, true)
+                    biometricState = biometricState.copy(
+                        portalLockEnabled = true,
+                        homePromoDismissed = true,
+                        lastErrorMessage = null
+                    )
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Kunci biometrik Portal Warga diaktifkan!")
+                    }
+                },
+                onError = { _, msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+            )
+        } else {
+            if (avail == BiometricAvailability.AVAILABLE) {
+                BiometricAuthHelper.authenticate(
+                    context = context,
+                    title = context.getString(R.string.biometric_toggle_title),
+                    subtitle = "Konfirmasi untuk menonaktifkan Kunci Portal Warga",
+                    negativeButtonText = context.getString(R.string.biometric_negative_cancel),
+                    onPromptShown = { isBiometricPromptActive = true },
+                    onPromptFinished = { isBiometricPromptActive = false },
+                    onSuccess = {
+                        BiometricAuthHelper.setPortalLockEnabled(context, currentUserId, false)
+                        biometricState = biometricState.copy(
+                            portalLockEnabled = false,
+                            isPortalLocked = false,
+                            lastErrorMessage = null
+                        )
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Kunci biometrik Portal Warga dinonaktifkan.")
+                        }
+                    },
+                    onError = { _, msg ->
+                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                    }
+                )
+            } else {
+                BiometricAuthHelper.setPortalLockEnabled(context, currentUserId, false)
+                biometricState = biometricState.copy(
+                    portalLockEnabled = false,
+                    isPortalLocked = false,
+                    lastErrorMessage = null
+                )
+            }
+        }
+    }
+
+    fun handleTogglePaymentBiometric(enable: Boolean) {
+        val avail = BiometricAuthHelper.checkAvailability(context)
+        biometricState = biometricState.copy(availability = avail)
+        if (enable) {
+            if (avail == BiometricAvailability.NONE_ENROLLED) {
+                BiometricAuthHelper.openBiometricEnrollSettings(context)
+                return
+            }
+            if (avail != BiometricAvailability.AVAILABLE) {
+                scope.launch {
+                    snackbarHostState.showSnackbar("Sensor biometrik tidak tersedia di perangkat ini.")
+                }
+                return
+            }
+            BiometricAuthHelper.authenticate(
+                context = context,
+                title = context.getString(R.string.biometric_toggle_title),
+                subtitle = "Aktifkan verifikasi biometrik saat pembayaran",
+                negativeButtonText = context.getString(R.string.biometric_negative_cancel),
+                onPromptShown = { isBiometricPromptActive = true },
+                onPromptFinished = { isBiometricPromptActive = false },
+                onSuccess = {
+                    BiometricAuthHelper.setPaymentBiometricEnabled(context, currentUserId, true)
+                    biometricState = biometricState.copy(requireOnPayment = true)
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Verifikasi biometrik pembayaran diaktifkan!")
+                    }
+                },
+                onError = { _, msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+            )
+        } else {
+            BiometricAuthHelper.setPaymentBiometricEnabled(context, currentUserId, false)
+            biometricState = biometricState.copy(requireOnPayment = false)
+            scope.launch {
+                snackbarHostState.showSnackbar("Verifikasi biometrik pembayaran dimatikan.")
+            }
+        }
+    }
+
+    LaunchedEffect(biometricState.isPortalLocked) {
+        if (biometricState.isPortalLocked && !isBiometricPromptActive) {
+            triggerPortalUnlockPrompt()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, currentUserId) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshDanaListenerStatus()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    if (!isBiometricPromptActive) {
+                        lastBackgroundElapsedMs = SystemClock.elapsedRealtime()
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.refreshDanaListenerStatus()
+                    val avail = BiometricAuthHelper.checkAvailability(context)
+                    val shouldRelock = biometricState.portalLockEnabled &&
+                        avail == BiometricAvailability.AVAILABLE &&
+                        BiometricAuthHelper.shouldRelockAfterBackground(
+                            lastStoppedElapsedMs = lastBackgroundElapsedMs,
+                            nowElapsedMs = SystemClock.elapsedRealtime()
+                        )
+                    lastBackgroundElapsedMs = 0L
+                    biometricState = biometricState.copy(
+                        availability = avail,
+                        isPortalLocked = (biometricState.isPortalLocked || shouldRelock) &&
+                            avail == BiometricAvailability.AVAILABLE
+                    )
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -302,6 +499,7 @@ private fun AuthenticatedShell(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -438,6 +636,12 @@ private fun AuthenticatedShell(
                                 when (activeTab) {
                                     MainTab.HOME -> HomeTab(
                                         state = state,
+                                        biometricState = biometricState,
+                                        onEnableBiometricClick = { handleTogglePortalBiometric(true) },
+                                        onDismissBiometricPromo = {
+                                            BiometricAuthHelper.setHomePromoDismissed(context, currentUserId, true)
+                                            biometricState = biometricState.copy(homePromoDismissed = true)
+                                        },
                                         onNavigateTab = viewModel::selectTab,
                                         onOpenQrisScanner = viewModel::openQrisScanner
                                     )
@@ -466,6 +670,22 @@ private fun AuthenticatedShell(
                                         onOpenQrisZoom = viewModel::openQrisZoom,
                                         onOpenQrisScanner = viewModel::openQrisScanner,
                                         onClearScannedQris = viewModel::clearScannedQris,
+                                        requireBiometricConfirm = biometricState.requireOnPayment &&
+                                            biometricState.availability == BiometricAvailability.AVAILABLE,
+                                        onRequestBiometricForPayment = { amount, onVerified ->
+                                            BiometricAuthHelper.authenticate(
+                                                context = context,
+                                                title = context.getString(R.string.biometric_payment_title),
+                                                subtitle = "Konfirmasi pembayaran ${formatRupiah(amount)}",
+                                                negativeButtonText = context.getString(R.string.biometric_negative_cancel),
+                                                onPromptShown = { isBiometricPromptActive = true },
+                                                onPromptFinished = { isBiometricPromptActive = false },
+                                                onSuccess = onVerified,
+                                                onError = { _, msg ->
+                                                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                                                }
+                                            )
+                                        },
                                         onSubmitPayment = viewModel::submitPayment
                                     )
                                     MainTab.INFO -> InfoTab(
@@ -527,6 +747,18 @@ private fun AuthenticatedShell(
                                             }
                                         },
                                         onFlushOfflineQueue = viewModel::flushOfflineNow,
+                                        biometricState = biometricState,
+                                        onTogglePortalBiometric = ::handleTogglePortalBiometric,
+                                        onTogglePaymentBiometric = ::handleTogglePaymentBiometric,
+                                        onLockPortalNow = {
+                                            biometricState = biometricState.copy(
+                                                isPortalLocked = true,
+                                                lastErrorMessage = null
+                                            )
+                                        },
+                                        onOpenBiometricEnroll = {
+                                            BiometricAuthHelper.openBiometricEnrollSettings(context)
+                                        },
                                         onSignOut = {
                                             onSignOutRequested(false)
                                             signOut(
@@ -651,6 +883,31 @@ private fun AuthenticatedShell(
                 )
             }
         }
+    }
+
+    AnimatedVisibility(
+        visible = biometricState.isPortalLocked,
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(220))
+    ) {
+        BiometricLockOverlay(
+            resident = state.currentResident,
+            blokName = state.settings.blokName,
+            availability = biometricState.availability,
+            errorMessage = biometricState.lastErrorMessage,
+            onUnlockClick = ::triggerPortalUnlockPrompt,
+            onOpenSettings = { BiometricAuthHelper.openBiometricEnrollSettings(context) },
+            onSignOut = {
+                biometricState = biometricState.copy(isPortalLocked = false)
+                onSignOutRequested(false)
+                signOut(
+                    credentialManager = credentialManager,
+                    scope = scope,
+                    onBeforeSignOut = { viewModel.clearCachesBeforeSignOut() }
+                )
+            }
+        )
+    }
     }
 }
 
