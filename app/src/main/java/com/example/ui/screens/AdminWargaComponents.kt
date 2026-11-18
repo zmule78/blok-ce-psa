@@ -45,7 +45,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -74,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import com.example.dana.DanaLiveBridge
 import com.example.data.local.DanaLiveEventEntity
 import com.example.data.model.AUTO_BILL_METHOD
+import com.example.data.model.MAX_DELEGATED_ADMINS_BY_PENGURUS
 import com.example.data.model.PRIMARY_ADMIN_EMAIL
 import com.example.data.model.Payment
 import com.example.data.model.Resident
@@ -82,29 +82,14 @@ import com.example.data.model.computeFundRecap
 import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
 import com.example.ui.components.uriToCompressedDataUri
-import com.example.ui.theme.Amber100
-import com.example.ui.theme.Amber50
-import com.example.ui.theme.Amber600
 import com.example.ui.theme.DanaBlue
-import com.example.ui.theme.DanaDark
-import com.example.ui.theme.DanaLight
 import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
-import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald900
-import com.example.ui.theme.Purple100
-import com.example.ui.theme.Purple700
-import com.example.ui.theme.Rose100
-import com.example.ui.theme.Rose50
 import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
+import com.example.ui.theme.adaptiveFieldColors
 import com.example.ui.viewmodel.MainUiState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -115,14 +100,15 @@ fun FundRecapCard(
     state: MainUiState,
     onExportRecapCsv: () -> Unit
 ) {
+    val ac = adaptiveColors
     val recap = remember(state.selectedMonth, state.allResidents, state.allPayments, state.settings) {
         computeFundRecap(state.selectedMonth, state.allResidents, state.allPayments, state.settings)
     }
 
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("rekap_dana_card")
@@ -143,20 +129,20 @@ fun FundRecapCard(
                     Icon(
                         imageVector = Icons.Filled.AccountBalanceWallet,
                         contentDescription = null,
-                        tint = Emerald700,
+                        tint = ac.emeraldText,
                         modifier = Modifier.size(20.dp)
                     )
                     Column {
                         Text(
                             text = "Rekapitulasi Dana",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Slate900,
+                            color = ac.textPrimary,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
                             text = monthLabel(state.selectedMonth),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                     }
                 }
@@ -170,13 +156,15 @@ fun FundRecapCard(
                     Icon(
                         imageVector = Icons.Filled.Download,
                         contentDescription = null,
+                        tint = ac.emeraldText,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ekspor", fontWeight = FontWeight.Bold)
+                    Text("Ekspor", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                 }
             }
 
+            // Hero summary card stays dark emerald gradient with white text
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -222,15 +210,15 @@ fun FundRecapCard(
                 RecapMetricPill(
                     label = "Iuran Lunas",
                     value = formatRupiah(recap.paidIuranAmount),
-                    bg = Emerald50,
-                    fg = Emerald700,
+                    bg = ac.emeraldSurface,
+                    fg = ac.emeraldText,
                     modifier = Modifier.weight(1f)
                 )
                 RecapMetricPill(
                     label = "Hidmat Lunas",
                     value = formatRupiah(recap.paidHidmatAmount),
-                    bg = DanaLight,
-                    fg = DanaDark,
+                    bg = ac.danaSurface,
+                    fg = ac.danaText,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -242,23 +230,23 @@ fun FundRecapCard(
                 RecapMetricPill(
                     label = "Pending Verif",
                     value = formatRupiah(recap.pendingVerificationAmount),
-                    bg = Amber50,
-                    fg = Amber600,
+                    bg = ac.amberSurface,
+                    fg = ac.amberText,
                     modifier = Modifier.weight(1f)
                 )
                 RecapMetricPill(
                     label = "Sisa Tagihan",
                     value = formatRupiah(recap.unpaidOutstandingAmount),
-                    bg = Rose50,
-                    fg = Rose600,
+                    bg = ac.roseSurface,
+                    fg = ac.roseText,
                     modifier = Modifier.weight(1f)
                 )
             }
 
             Surface(
-                color = Slate50,
+                color = ac.cardElevated,
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Slate200),
+                border = BorderStroke(1.dp, ac.borderSubtle),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -272,12 +260,12 @@ fun FundRecapCard(
                         Text(
                             text = "Akumulasi Tahun ${state.selectedMonth.take(4)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                         Text(
                             text = formatRupiah(recap.yearTotalCollected),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Emerald700,
+                            color = ac.emeraldText,
                             fontWeight = FontWeight.ExtraBold
                         )
                     }
@@ -288,21 +276,21 @@ fun FundRecapCard(
                         Text(
                             text = "Total Kas Masuk Keseluruhan",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                         Text(
                             text = formatRupiah(recap.allTimeCollected),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate900,
+                            color = ac.textPrimary,
                             fontWeight = FontWeight.Black
                         )
                     }
                     if (recap.methodBreakdowns.isNotEmpty()) {
-                        HorizontalDivider(color = Slate200)
+                        HorizontalDivider(color = ac.divider)
                         Text(
                             text = "Rincian Metode Pembayaran (${monthLabel(state.selectedMonth)})",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Slate600,
+                            color = ac.textSecondary,
                             fontWeight = FontWeight.Bold
                         )
                         recap.methodBreakdowns.forEach { item ->
@@ -313,12 +301,12 @@ fun FundRecapCard(
                                 Text(
                                     text = "${item.method} (${item.count}x)",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate600
+                                    color = ac.textSecondary
                                 )
                                 Text(
                                     text = formatRupiah(item.totalAmount),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate900,
+                                    color = ac.textPrimary,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -338,6 +326,7 @@ private fun RecapMetricPill(
     fg: Color,
     modifier: Modifier = Modifier
 ) {
+    val ac = adaptiveColors
     Surface(
         color = bg,
         shape = RoundedCornerShape(14.dp),
@@ -356,7 +345,7 @@ private fun RecapMetricPill(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleSmall,
-                color = Slate900,
+                color = ac.textPrimary,
                 fontWeight = FontWeight.Black
             )
         }
@@ -370,7 +359,10 @@ fun AdminRoleManagementCard(
     onDemoteAdmin: (targetUid: String) -> Unit,
     onEditAdminProfile: (Resident) -> Unit
 ) {
+    val ac = adaptiveColors
     val currentUid = state.currentResident?.id.orEmpty()
+    val isPrimaryAdmin = state.currentResident?.primaryAdmin == true
+
     val delegatedResidentMap = remember(state.allResidents) {
         state.allResidents.associateBy { it.id }
     }
@@ -383,11 +375,13 @@ fun AdminRoleManagementCard(
             it.userId !in knownIds && !it.email.equals(PRIMARY_ADMIN_EMAIL, ignoreCase = true)
         }
     }
+    val totalDelegatedCount = delegatedResidents.size + extraAdminRecords.size
+    val canPengurusPromoteMore = isPrimaryAdmin || totalDelegatedCount < MAX_DELEGATED_ADMINS_BY_PENGURUS
 
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("admin_role_management_card")
@@ -397,33 +391,59 @@ fun AdminRoleManagementCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.AdminPanelSettings,
-                    contentDescription = null,
-                    tint = Emerald700,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Kelola Role & Akses Admin",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Slate900,
-                    fontWeight = FontWeight.ExtraBold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = ac.emeraldText,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Kelola Role & Akses Admin",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = ac.textPrimary,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                if (!isPrimaryAdmin) {
+                    Surface(
+                        color = ac.purpleSurface,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, ac.purpleBorder)
+                    ) {
+                        Text(
+                            text = "Kuota: $totalDelegatedCount/$MAX_DELEGATED_ADMINS_BY_PENGURUS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ac.purpleText,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
             Text(
-                text = "Admin dapat mengangkat warga menjadi Admin (role: admin) dan menurunkannya kembali menjadi Warga. Admin Utama bersifat permanen dan tidak bisa diturunkan.",
+                text = if (isPrimaryAdmin) {
+                    "Sebagai Admin Utama, Anda dapat mengangkat warga menjadi Pengurus Blok, mengedit profil & Hidmat pengurus, maupun menurunkannya kapan saja."
+                } else {
+                    "Pengurus Blok dapat memilih maksimal $MAX_DELEGATED_ADMINS_BY_PENGURUS akun warga menjadi Pengurus Blok. Hanya Admin Utama yang dapat mengubah atau menurunkan Pengurus Blok."
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate500
+                color = ac.textSecondary
             )
 
             // Permanent Primary Admin Card
             Surface(
-                color = Emerald50,
+                color = ac.emeraldSurface,
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Emerald100),
+                border = BorderStroke(1.dp, ac.emeraldBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -435,13 +455,13 @@ fun AdminRoleManagementCard(
                         Text(
                             text = "ADMIN UTAMA & TETAP",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Emerald700,
+                            color = ac.emeraldText,
                             fontWeight = FontWeight.Black
                         )
                         Text(
                             text = PRIMARY_ADMIN_EMAIL,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Slate900,
+                            color = ac.textPrimary,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -473,8 +493,8 @@ fun AdminRoleManagementCard(
 
             Button(
                 onClick = onOpenPromoteDialog,
-                enabled = !state.isMutating,
-                colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                enabled = !state.isMutating && canPengurusPromoteMore,
+                colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -487,21 +507,28 @@ fun AdminRoleManagementCard(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Pilih Warga Jadi Admin", fontWeight = FontWeight.ExtraBold)
+                Text(
+                    text = if (canPengurusPromoteMore) {
+                        "Pilih Warga Jadi Pengurus"
+                    } else {
+                        "Kuota Maksimal $MAX_DELEGATED_ADMINS_BY_PENGURUS Pengurus Tercapai"
+                    },
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
 
             if (delegatedResidents.isNotEmpty() || extraAdminRecords.isNotEmpty()) {
-                HorizontalDivider(color = Slate100)
+                HorizontalDivider(color = ac.divider)
                 Text(
-                    text = "Daftar Pengurus (role: admin)",
+                    text = "Daftar Pengurus Blok (role: admin)",
                     style = MaterialTheme.typography.labelLarge,
-                    color = Slate900
+                    color = ac.textPrimary
                 )
                 delegatedResidents.forEach { adm ->
                     Surface(
-                        color = Slate50,
+                        color = ac.cardElevated,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Slate200),
+                        border = BorderStroke(1.dp, ac.borderSubtle),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -517,65 +544,67 @@ fun AdminRoleManagementCard(
                                     Text(
                                         text = adm.name.ifBlank { adm.email },
                                         style = MaterialTheme.typography.labelLarge,
-                                        color = Slate900,
+                                        color = ac.textPrimary,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = "${adm.roleLabel} • ${adm.house}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Emerald700
+                                        color = ac.emeraldText
                                     )
                                     Text(
                                         text = adm.email,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Slate500,
+                                        color = ac.textMuted,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 Surface(
-                                    color = Purple100,
+                                    color = ac.purpleSurface,
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text(
-                                        text = "ADMIN",
+                                        text = "PENGURUS",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Purple700,
+                                        color = ac.purpleText,
                                         fontWeight = FontWeight.ExtraBold,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
                             }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { onEditAdminProfile(adm) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 48.dp)
-                                        .testTag("edit_admin_resident_${adm.id}")
+                            if (isPrimaryAdmin) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Filled.Edit, null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Edit Profil", style = MaterialTheme.typography.labelMedium)
-                                }
-                                if (adm.id != currentUid) {
                                     OutlinedButton(
-                                        onClick = { onDemoteAdmin(adm.id) },
-                                        enabled = !state.isMutating,
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Rose600),
+                                        onClick = { onEditAdminProfile(adm) },
                                         shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier
                                             .weight(1f)
                                             .heightIn(min = 48.dp)
-                                            .testTag("demote_admin_${adm.id}")
+                                            .testTag("edit_admin_resident_${adm.id}")
                                     ) {
-                                        Icon(Icons.Filled.PersonRemove, null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Filled.Edit, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Turunkan jadi Warga", style = MaterialTheme.typography.labelSmall)
+                                        Text("Edit Profil", style = MaterialTheme.typography.labelMedium, color = ac.textPrimary)
+                                    }
+                                    if (adm.id != currentUid) {
+                                        OutlinedButton(
+                                            onClick = { onDemoteAdmin(adm.id) },
+                                            enabled = !state.isMutating,
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ac.roseText),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 48.dp)
+                                                .testTag("demote_admin_${adm.id}")
+                                        ) {
+                                            Icon(Icons.Filled.PersonRemove, null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Turunkan jadi Warga", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
@@ -585,9 +614,9 @@ fun AdminRoleManagementCard(
                 extraAdminRecords.forEach { rec ->
                     val linkedRes = delegatedResidentMap[rec.userId]
                     Surface(
-                        color = Slate50,
+                        color = ac.cardElevated,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Slate200),
+                        border = BorderStroke(1.dp, ac.borderSubtle),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -599,22 +628,22 @@ fun AdminRoleManagementCard(
                                 Text(
                                     text = linkedRes?.name ?: rec.email,
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = Slate900
+                                    color = ac.textPrimary
                                 )
                                 Text(
                                     text = "${rec.roleLabel} • ${rec.email}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate500
+                                    color = ac.textMuted
                                 )
                             }
-                            if (rec.userId != currentUid) {
+                            if (isPrimaryAdmin && rec.userId != currentUid) {
                                 TextButton(
                                     onClick = { onDemoteAdmin(rec.userId) },
                                     modifier = Modifier
                                         .heightIn(min = 48.dp)
                                         .testTag("demote_admin_${rec.userId}")
                                 ) {
-                                    Text("Turunkan", color = Rose600, fontWeight = FontWeight.Bold)
+                                    Text("Turunkan", color = ac.roseText, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -624,7 +653,7 @@ fun AdminRoleManagementCard(
                 Text(
                     text = "Belum ada pengurus tambahan selain Admin Utama.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate400
+                    color = ac.textMuted
                 )
             }
         }
@@ -640,12 +669,13 @@ fun DanaLiveIntegrationCard(
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val ac = adaptiveColors
     var matchingEvent by remember { mutableStateOf<DanaLiveEventEntity?>(null) }
 
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("dana_live_card")
@@ -667,25 +697,25 @@ fun DanaLiveIntegrationCard(
                     Icon(
                         imageVector = Icons.Filled.Sync,
                         contentDescription = null,
-                        tint = DanaBlue,
+                        tint = ac.danaText,
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = "Verifikasi DANA Live",
                         style = MaterialTheme.typography.titleSmall,
-                        color = Slate900,
+                        color = ac.textPrimary,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
                 Surface(
-                    color = if (state.danaListenerEnabled) Emerald50 else Amber50,
+                    color = if (state.danaListenerEnabled) ac.emeraldSurface else ac.amberSurface,
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, if (state.danaListenerEnabled) Emerald100 else Amber100)
+                    border = BorderStroke(1.dp, if (state.danaListenerEnabled) ac.emeraldBorder else ac.amberBorder)
                 ) {
                     Text(
                         text = if (state.danaListenerEnabled) "LIVE AKTIF" else "PERLU IZIN",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (state.danaListenerEnabled) Emerald700 else Amber600,
+                        color = if (state.danaListenerEnabled) ac.emeraldText else ac.amberText,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -693,15 +723,15 @@ fun DanaLiveIntegrationCard(
             }
 
             Text(
-                text = "Terhubung otomatis ke notifikasi resmi aplikasi DANA (id.dana) di perangkat Admin. Setiap saldo masuk yang cocok nominal/nama pengirim otomatis memverifikasi tagihan warga menjadi LUNAS secara live.",
+                text = "Terhubung otomatis ke notifikasi resmi aplikasi DANA (id.dana) di perangkat Admin Utama. Setiap saldo masuk yang cocok nominal/nama pengirim otomatis memverifikasi tagihan warga menjadi LUNAS secara live.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate500
+                color = ac.textSecondary
             )
 
             Surface(
-                color = Slate50,
+                color = ac.cardElevated,
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Slate200)
+                border = BorderStroke(1.dp, ac.borderSubtle)
             ) {
                 Row(
                     modifier = Modifier
@@ -714,13 +744,13 @@ fun DanaLiveIntegrationCard(
                         Text(
                             text = "Auto-Verifikasi Pembayaran Live",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Slate900,
+                            color = ac.textPrimary,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Otomatis ubah status ke Lunas saat notif DANA masuk",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                     }
                     Switch(
@@ -739,7 +769,12 @@ fun DanaLiveIntegrationCard(
                 Button(
                     onClick = { DanaLiveBridge.openNotificationListenerSettings(context) },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (state.danaListenerEnabled) Slate900 else DanaBlue
+                        containerColor = if (state.danaListenerEnabled) {
+                            if (ac.isDark) Emerald700 else Slate900
+                        } else {
+                            DanaBlue
+                        },
+                        contentColor = Color.White
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
@@ -767,14 +802,14 @@ fun DanaLiveIntegrationCard(
                         .heightIn(min = 48.dp)
                         .testTag("admin_open_dana_button")
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, null, modifier = Modifier.size(16.dp), tint = ac.danaText)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Buka DANA", fontWeight = FontWeight.Bold)
+                    Text("Buka DANA", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                 }
             }
 
             if (state.danaLiveEvents.isNotEmpty()) {
-                HorizontalDivider(color = Slate100)
+                HorizontalDivider(color = ac.divider)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -783,29 +818,29 @@ fun DanaLiveIntegrationCard(
                     Text(
                         text = "Mutasi Notifikasi DANA (${state.danaLiveEvents.size})",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     TextButton(
                         onClick = onClearEvents,
                         modifier = Modifier.heightIn(min = 48.dp)
                     ) {
-                        Icon(Icons.Filled.ClearAll, null, modifier = Modifier.size(16.dp), tint = Slate500)
+                        Icon(Icons.Filled.ClearAll, null, modifier = Modifier.size(16.dp), tint = ac.textMuted)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Bersihkan", color = Slate500)
+                        Text("Bersihkan", color = ac.textMuted)
                     }
                 }
                 val fmt = remember { SimpleDateFormat("dd/MM HH:mm", Locale("id", "ID")) }
                 state.danaLiveEvents.take(5).forEach { ev ->
                     val statusColor = when (ev.status) {
-                        "AUTO_VERIFIED" -> Emerald700
-                        "NEED_REVIEW" -> Amber600
-                        "ERROR" -> Rose600
-                        else -> Slate600
+                        "AUTO_VERIFIED" -> ac.emeraldText
+                        "NEED_REVIEW" -> ac.amberText
+                        "ERROR" -> ac.roseText
+                        else -> ac.textSecondary
                     }
                     Surface(
-                        color = Slate50,
+                        color = ac.cardElevated,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Slate200),
+                        border = BorderStroke(1.dp, ac.borderSubtle),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -820,7 +855,7 @@ fun DanaLiveIntegrationCard(
                                 Text(
                                     text = formatRupiah(ev.parsedAmount),
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = DanaDark,
+                                    color = ac.danaText,
                                     fontWeight = FontWeight.Black
                                 )
                                 Text(
@@ -834,14 +869,14 @@ fun DanaLiveIntegrationCard(
                                 Text(
                                     text = "Pengirim: ${ev.senderHint}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate900,
+                                    color = ac.textPrimary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
                             Text(
                                 text = ev.matchedSummary.ifBlank { ev.content },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate500,
+                                color = ac.textSecondary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -854,9 +889,9 @@ fun DanaLiveIntegrationCard(
                                         .heightIn(min = 48.dp)
                                         .testTag("match_dana_event_${ev.id}")
                                 ) {
-                                    Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Cocokkan Tagihan Manual")
+                                    Text("Cocokkan Tagihan Manual", color = ac.textPrimary)
                                 }
                             }
                         }
@@ -886,10 +921,11 @@ fun AdminSystemToolsCard(
     onOpenEditSettings: () -> Unit,
     onOpenAnnouncements: () -> Unit
 ) {
+    val ac = adaptiveColors
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("admin_system_tools_card")
@@ -905,20 +941,20 @@ fun AdminSystemToolsCard(
                 Icon(
                     imageVector = Icons.Filled.Settings,
                     contentDescription = null,
-                    tint = Emerald700,
+                    tint = ac.emeraldText,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
                     text = "Sistem Admin Blok",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
             Surface(
-                color = Slate50,
+                color = ac.cardElevated,
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Slate200),
+                border = BorderStroke(1.dp, ac.borderSubtle),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -928,12 +964,12 @@ fun AdminSystemToolsCard(
                     Text(
                         text = "${settings.blokName} • DANA ${settings.danaNumber}",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     Text(
                         text = "Tarif Iuran ${formatRupiah(settings.iuranAmount)} • Tarif Hidmat ${formatRupiah(settings.hidmatAmount)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate600
+                        color = ac.textSecondary
                     )
                 }
             }
@@ -943,7 +979,10 @@ fun AdminSystemToolsCard(
             ) {
                 Button(
                     onClick = onOpenEditSettings,
-                    colors = ButtonDefaults.buttonColors(containerColor = Slate900),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (ac.isDark) DanaBlue else Slate900,
+                        contentColor = Color.White
+                    ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -962,9 +1001,9 @@ fun AdminSystemToolsCard(
                         .heightIn(min = 48.dp)
                         .testTag("open_admin_announcements_button")
                 ) {
-                    Icon(Icons.Filled.Newspaper, null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Newspaper, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Kelola Info", style = MaterialTheme.typography.labelMedium)
+                    Text("Kelola Info", style = MaterialTheme.typography.labelMedium, color = ac.textPrimary)
                 }
             }
         }
@@ -975,6 +1014,8 @@ fun AdminSystemToolsCard(
 fun EditResidentDialog(
     resident: Resident,
     currentAdminUid: String,
+    isPrimaryAdmin: Boolean,
+    canPromoteMore: Boolean,
     isMutating: Boolean,
     onSave: (
         username: String,
@@ -987,6 +1028,7 @@ fun EditResidentDialog(
     ) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     var username by remember(resident.id) { mutableStateOf(resident.username) }
     var name by remember(resident.id) { mutableStateOf(resident.name) }
     var house by remember(resident.id) { mutableStateOf(resident.house) }
@@ -1002,10 +1044,20 @@ fun EditResidentDialog(
 
     val isLockedPrimary = resident.isPermanentPrimaryEmail
     val isSelf = resident.id == currentAdminUid
+    val targetIsAdminManagedByPengurus = !isPrimaryAdmin && resident.adminRole
+    val canToggleRole = !isLockedPrimary && !isSelf && !targetIsAdminManagedByPengurus &&
+        (resident.adminRole || canPromoteMore)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Profil Warga") },
+        containerColor = ac.cardContainer,
+        titleContentColor = ac.textPrimary,
+        textContentColor = ac.textPrimary,
+        title = {
+            Text(
+                if (resident.adminRole) "Edit Profil Pengurus / Admin" else "Edit Profil Warga"
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -1014,13 +1066,15 @@ fun EditResidentDialog(
                 Text(
                     text = resident.email,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate500
+                    color = ac.textMuted
                 )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Nama Lengkap") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_resident_name_input")
@@ -1030,6 +1084,8 @@ fun EditResidentDialog(
                     onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_resident_username_input")
@@ -1039,6 +1095,8 @@ fun EditResidentDialog(
                     onValueChange = { house = it },
                     label = { Text("No. Rumah") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_resident_house_input")
@@ -1049,6 +1107,8 @@ fun EditResidentDialog(
                     label = { Text("No. HP") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("edit_resident_phone_input")
@@ -1058,7 +1118,7 @@ fun EditResidentDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Peserta Hidmat", style = MaterialTheme.typography.bodyMedium)
+                    Text("Peserta Hidmat", style = MaterialTheme.typography.bodyMedium, color = ac.textPrimary)
                     Switch(
                         checked = hidmatEnabled,
                         onCheckedChange = { hidmatEnabled = it },
@@ -1067,15 +1127,15 @@ fun EditResidentDialog(
                 }
                 if (isLockedPrimary) {
                     Surface(
-                        color = Emerald50,
+                        color = ac.emeraldSurface,
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Emerald100),
+                        border = BorderStroke(1.dp, ac.emeraldBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "Admin Utama (${PRIMARY_ADMIN_EMAIL}) bersifat tetap dan role tidak dapat diubah.",
+                            text = "Admin Utama ($PRIMARY_ADMIN_EMAIL) bersifat tetap dan role tidak dapat diubah.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Emerald700,
+                            color = ac.emeraldText,
                             modifier = Modifier.padding(10.dp)
                         )
                     }
@@ -1086,18 +1146,28 @@ fun EditResidentDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Role Admin ('role: admin')", style = MaterialTheme.typography.bodyMedium)
-                            if (isSelf) {
-                                Text(
+                            Text("Role Admin ('role: admin')", style = MaterialTheme.typography.bodyMedium, color = ac.textPrimary)
+                            when {
+                                isSelf -> Text(
                                     text = "Tidak bisa menurunkan akun sendiri",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate400
+                                    color = ac.textMuted
+                                )
+                                targetIsAdminManagedByPengurus -> Text(
+                                    text = "Hanya Admin Utama yang bisa mengubah role Pengurus Blok",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ac.textMuted
+                                )
+                                !canPromoteMore && !resident.adminRole -> Text(
+                                    text = "Kuota maksimal $MAX_DELEGATED_ADMINS_BY_PENGURUS pengurus oleh Pengurus Blok penuh",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ac.roseText
                                 )
                             }
                         }
                         Switch(
                             checked = makeAdmin,
-                            enabled = !isSelf,
+                            enabled = canToggleRole,
                             onCheckedChange = { makeAdmin = it },
                             colors = SwitchDefaults.colors(checkedTrackColor = Emerald700),
                             modifier = Modifier.testTag("edit_resident_role_switch")
@@ -1109,6 +1179,8 @@ fun EditResidentDialog(
                             onValueChange = { roleLabel = it },
                             label = { Text("Jabatan / Label Admin") },
                             singleLine = true,
+                            colors = adaptiveFieldColors(),
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -1121,7 +1193,7 @@ fun EditResidentDialog(
                     onSave(username, name, house, phone, hidmatEnabled, makeAdmin, roleLabel)
                 },
                 enabled = !isMutating && username.trim().length >= 3 && name.isNotBlank() && house.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                 modifier = Modifier.testTag("save_edit_resident_button")
             ) {
                 Text("Simpan")
@@ -1129,7 +1201,7 @@ fun EditResidentDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Batal")
+                Text("Batal", color = ac.textSecondary)
             }
         }
     )
@@ -1138,10 +1210,12 @@ fun EditResidentDialog(
 @Composable
 fun PromoteResidentDialog(
     residents: List<Resident>,
+    remainingSlots: Int?,
     isMutating: Boolean,
     onPromote: (targetUid: String, roleLabel: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     var search by remember { mutableStateOf("") }
     var roleLabel by remember { mutableStateOf("Admin / Pengurus Blok") }
     val candidates = remember(residents, search) {
@@ -1151,10 +1225,22 @@ fun PromoteResidentDialog(
                 it.house.lowercase().contains(q) || it.email.lowercase().contains(q)
         }
     }
+    val canSelect = remainingSlots == null || remainingSlots > 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pilih Warga Jadi Admin") },
+        containerColor = ac.cardContainer,
+        titleContentColor = ac.textPrimary,
+        textContentColor = ac.textPrimary,
+        title = {
+            Text(
+                if (remainingSlots != null) {
+                    "Pilih Warga (Sisa Kuota $remainingSlots)"
+                } else {
+                    "Pilih Warga Jadi Pengurus"
+                }
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -1162,14 +1248,18 @@ fun PromoteResidentDialog(
                     onValueChange = { roleLabel = it },
                     label = { Text("Label Jabatan Admin") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
                     placeholder = { Text("Cari nama / rumah / email...") },
-                    leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    leadingIcon = { Icon(Icons.Filled.Search, null, tint = ac.textMuted) },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Column(
@@ -1179,21 +1269,27 @@ fun PromoteResidentDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (candidates.isEmpty()) {
+                    if (!canSelect) {
+                        Text(
+                            text = "Kuota maksimal $MAX_DELEGATED_ADMINS_BY_PENGURUS admin oleh Pengurus Blok sudah penuh.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ac.roseText
+                        )
+                    } else if (candidates.isEmpty()) {
                         Text(
                             text = "Tidak ada warga yang memenuhi filter.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate400
+                            color = ac.textMuted
                         )
                     } else {
                         candidates.forEach { candidate ->
                             Surface(
-                                color = Slate50,
+                                color = ac.cardElevated,
                                 shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, Slate200),
+                                border = BorderStroke(1.dp, ac.borderSubtle),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = !isMutating) {
+                                    .clickable(enabled = !isMutating && canSelect) {
                                         onPromote(candidate.id, roleLabel)
                                     }
                                     .testTag("promote_candidate_${candidate.id}")
@@ -1207,12 +1303,12 @@ fun PromoteResidentDialog(
                                         Text(
                                             text = candidate.name,
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = Slate900
+                                            color = ac.textPrimary
                                         )
                                         Text(
                                             text = "${candidate.house} • ${candidate.email}",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Slate500,
+                                            color = ac.textMuted,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -1220,7 +1316,7 @@ fun PromoteResidentDialog(
                                     Text(
                                         text = "Angkat",
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = Emerald700,
+                                        color = ac.emeraldText,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 }
@@ -1233,7 +1329,7 @@ fun PromoteResidentDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Tutup")
+                Text("Tutup", color = ac.textSecondary)
             }
         }
     )
@@ -1247,6 +1343,7 @@ fun EditSystemSettingsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val ac = adaptiveColors
     var blokName by remember(settings) { mutableStateOf(settings.blokName) }
     var subtitle by remember(settings) { mutableStateOf(settings.subtitle) }
     var danaNumber by remember(settings) { mutableStateOf(settings.danaNumber) }
@@ -1266,6 +1363,9 @@ fun EditSystemSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = ac.cardContainer,
+        titleContentColor = ac.textPrimary,
+        textContentColor = ac.textPrimary,
         title = { Text("Pengaturan Sistem Blok") },
         text = {
             Column(
@@ -1277,6 +1377,8 @@ fun EditSystemSettingsDialog(
                     onValueChange = { blokName = it },
                     label = { Text("Nama Blok") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -1284,6 +1386,8 @@ fun EditSystemSettingsDialog(
                     onValueChange = { subtitle = it },
                     label = { Text("Subjudul") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -1292,6 +1396,8 @@ fun EditSystemSettingsDialog(
                     label = { Text("Nomor DANA Resmi") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -1299,6 +1405,8 @@ fun EditSystemSettingsDialog(
                     onValueChange = { danaOwner = it },
                     label = { Text("Atas Nama DANA") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -1307,6 +1415,8 @@ fun EditSystemSettingsDialog(
                     label = { Text("Tarif Iuran (Rp)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -1315,6 +1425,8 @@ fun EditSystemSettingsDialog(
                     label = { Text("Tarif Hidmat (Rp)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(
@@ -1327,7 +1439,7 @@ fun EditSystemSettingsDialog(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = DanaBlue),
+                        colors = ButtonDefaults.buttonColors(containerColor = DanaBlue, contentColor = Color.White),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
@@ -1341,7 +1453,7 @@ fun EditSystemSettingsDialog(
                             onClick = { customQris = "" },
                             modifier = Modifier.heightIn(min = 48.dp)
                         ) {
-                            Text("Reset")
+                            Text("Reset", color = ac.textPrimary)
                         }
                     }
                 }
@@ -1363,7 +1475,7 @@ fun EditSystemSettingsDialog(
                     )
                 },
                 enabled = !isMutating,
-                colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                 modifier = Modifier.testTag("save_system_dialog_button")
             ) {
                 Text("Simpan Sistem")
@@ -1371,7 +1483,7 @@ fun EditSystemSettingsDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Batal")
+                Text("Batal", color = ac.textSecondary)
             }
         }
     )
@@ -1384,6 +1496,7 @@ private fun MatchDanaEventDialog(
     onMatchPayment: (Payment) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     val residentById = remember(state.allResidents) { state.allResidents.associateBy { it.id } }
     val openPayments = remember(state.allPayments, event.parsedAmount) {
         state.allPayments
@@ -1398,6 +1511,9 @@ private fun MatchDanaEventDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = ac.cardContainer,
+        titleContentColor = ac.textPrimary,
+        textContentColor = ac.textPrimary,
         title = { Text("Cocokkan Mutasi ${formatRupiah(event.parsedAmount)}") },
         text = {
             Column(
@@ -1411,7 +1527,7 @@ private fun MatchDanaEventDialog(
                     Text(
                         text = "Pengirim terdeteksi: ${event.senderHint}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DanaDark,
+                        color = ac.danaText,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1419,17 +1535,17 @@ private fun MatchDanaEventDialog(
                     Text(
                         text = "Tidak ada tagihan terbuka (unpaid/pending) yang tersedia.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textMuted
                     )
                 } else {
                     openPayments.forEach { pay ->
                         val owner = residentById[pay.userId]
                         Surface(
-                            color = if (pay.amount == event.parsedAmount) Emerald50 else Slate50,
+                            color = if (pay.amount == event.parsedAmount) ac.emeraldSurface else ac.cardElevated,
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(
                                 1.dp,
-                                if (pay.amount == event.parsedAmount) Emerald600 else Slate200
+                                if (pay.amount == event.parsedAmount) ac.emeraldText else ac.borderSubtle
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1439,12 +1555,12 @@ private fun MatchDanaEventDialog(
                                 Text(
                                     text = "${owner?.name ?: pay.userId} (${owner?.house ?: "-"})",
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = Slate900
+                                    color = ac.textPrimary
                                 )
                                 Text(
                                     text = "${pay.type.uppercase()} • ${monthLabel(pay.month)} • ${formatRupiah(pay.amount)} • ${pay.status}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate600
+                                    color = ac.textSecondary
                                 )
                             }
                         }
@@ -1455,7 +1571,7 @@ private fun MatchDanaEventDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Tutup")
+                Text("Tutup", color = ac.textSecondary)
             }
         }
     )

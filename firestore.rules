@@ -23,14 +23,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdminEmail() {
+    function isPrimaryAdmin() {
       return isSignedIn() &&
         request.auth.token.email_verified == true &&
         request.auth.token.email == 'kfkhoerul05@gmail.com';
     }
 
     function isAdmin() {
-      return isAdminEmail() ||
+      return isPrimaryAdmin() ||
         (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
 
@@ -90,7 +90,9 @@ service cloud.firestore {
              data.status in ['unpaid', 'pending', 'paid'] &&
              data.dateLabel is string && data.dateLabel.size() >= 1 && data.dateLabel.size() <= 30 &&
              data.method is string && data.method.size() >= 1 && data.method.size() <= 50 &&
-             data.note is string && data.note.size() <= 200;
+             data.note is string && data.note.size() <= 200 &&
+             (!('receiptImageUrl' in data) || (data.receiptImageUrl is string && data.receiptImageUrl.size() <= 250000)) &&
+             (!('receiptOcrText' in data) || (data.receiptOcrText is string && data.receiptOcrText.size() <= 500));
     }
 
     function isValidAnnouncement(data) {
@@ -138,6 +140,53 @@ service cloud.firestore {
              data.verifiedByUid is string && data.verifiedByUid.size() <= 128;
     }
 
+    function isValidUserPresence(data, uid) {
+      return data.userId is string && data.userId == uid && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.house is string && data.house.size() <= 40 &&
+             data.email is string && data.email.size() <= 120 &&
+             data.role in ['admin', 'member'] &&
+             data.roleLabel is string && data.roleLabel.size() <= 60 &&
+             data.online is bool &&
+             data.activeScreen is string && data.activeScreen.size() <= 60 &&
+             data.lastSeenMillis is int && data.lastSeenMillis >= 0;
+    }
+
+    function isValidActivityLog(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 120 &&
+             data.userEmail is string && data.userEmail.size() <= 120 &&
+             data.userRole is string && data.userRole.size() <= 60 &&
+             data.house is string && data.house.size() <= 40 &&
+             data.actionType is string && data.actionType.size() >= 1 && data.actionType.size() <= 40 &&
+             data.screen is string && data.screen.size() <= 60 &&
+             data.detail is string && data.detail.size() <= 300;
+    }
+
+    function isValidFinanceEntry(data) {
+      return data.kind in ['masuk', 'keluar', 'kas_blok'] &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.amount is int && data.amount > 0 && data.amount <= 1000000000 &&
+             data.month is string && data.month.size() == 7 && data.month.matches('^\\d{4}-\\d{2}$') &&
+             data.dateLabel is string && data.dateLabel.size() >= 1 && data.dateLabel.size() <= 30 &&
+             data.note is string && data.note.size() <= 300 &&
+             data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 &&
+             data.createdByName is string && data.createdByName.size() >= 1 && data.createdByName.size() <= 120;
+    }
+
+    function isValidBudgetPlan(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.month is string && data.month.size() == 7 && data.month.matches('^\\d{4}-\\d{2}$') &&
+             data.plannedAmount is int && data.plannedAmount > 0 && data.plannedAmount <= 1000000000 &&
+             data.realizedAmount is int && data.realizedAmount >= 0 && data.realizedAmount <= 1000000000 &&
+             data.status in ['planned', 'in_progress', 'completed'] &&
+             data.note is string && data.note.size() <= 300 &&
+             data.createdByUid is string && data.createdByUid.size() >= 1 && data.createdByUid.size() <= 128 &&
+             data.updatedByName is string && data.updatedByName.size() >= 1 && data.updatedByName.size() <= 120;
+    }
+
     // --- COLLECTION RULES ---
 
     match /admins/{uid} {
@@ -152,8 +201,16 @@ service cloud.firestore {
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        (
                          (
-                           isAdmin() &&
+                           isPrimaryAdmin() &&
                            incoming().grantedByUid == request.auth.uid
+                         ) ||
+                         (
+                           isAdmin() &&
+                           !isPrimaryAdmin() &&
+                           incoming().grantedByUid == request.auth.uid &&
+                           incoming().email != 'kfkhoerul05@gmail.com' &&
+                           existsAfter(/databases/$(database)/documents/admin_meta/delegated_counter) &&
+                           getAfter(/databases/$(database)/documents/admin_meta/delegated_counter).data.count <= 3
                          ) ||
                          (
                            request.auth.uid == uid &&
@@ -174,7 +231,7 @@ service cloud.firestore {
 
       allow update: if isSignedIn() &&
                        isValidId(uid) &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        isValidAdminRecord(incoming(), uid) &&
                        incoming().userId == existing().userId &&
                        incoming().email == existing().email &&
@@ -188,9 +245,25 @@ service cloud.firestore {
                        existing().email != 'kfkhoerul05@gmail.com';
     }
 
+    match /admin_meta/{docId} {
+      allow get: if isAdmin() && isValidId(docId) && docId == 'delegated_counter';
+      allow list: if false;
+
+      allow create, update: if isAdmin() &&
+                               isValidId(docId) &&
+                               docId == 'delegated_counter' &&
+                               incoming().keys().hasAll(['count', 'updatedAt']) &&
+                               incoming().keys().hasOnly(['count', 'updatedAt']) &&
+                               incoming().count is int && incoming().count >= 0 && incoming().count <= 100 &&
+                               incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                               (isPrimaryAdmin() || incoming().count <= 3);
+
+      allow delete: if false;
+    }
+
     match /admin_invites/{inviteCode} {
       allow get: if isSignedIn() && isValidId(inviteCode);
-      allow list: if isAdminEmail();
+      allow list: if isPrimaryAdmin();
 
       allow create: if isSignedIn() &&
                        isValidId(inviteCode) &&
@@ -203,7 +276,7 @@ service cloud.firestore {
                        incoming().createdByUid == request.auth.uid &&
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
-                       isAdminEmail();
+                       isPrimaryAdmin();
 
       allow update: if isSignedIn() &&
                        isValidId(inviteCode) &&
@@ -225,10 +298,10 @@ service cloud.firestore {
                            incoming().diff(existing()).affectedKeys().hasOnly(['used', 'usedByUid', 'usedByEmail', 'updatedAt']) &&
                            existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))
                          ) ||
-                         isAdminEmail()
+                         isPrimaryAdmin()
                        );
 
-      allow delete: if isSignedIn() && isValidId(inviteCode) && isAdminEmail();
+      allow delete: if isSignedIn() && isValidId(inviteCode) && isPrimaryAdmin();
     }
 
     match /system_settings/{configId} {
@@ -243,7 +316,7 @@ service cloud.firestore {
                        incoming().keys().hasOnly(['blokName', 'subtitle', 'danaNumber', 'danaAccountName', 'customQrisData', 'iuranAmount', 'hidmatAmount', 'reminderEnabled', 'reminderTitle', 'reminderMessage', 'pushBlastId', 'pushTargetUserId', 'createdAt', 'updatedAt']) &&
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
-                       isAdmin();
+                       isPrimaryAdmin();
 
       allow update: if isSignedIn() &&
                        isValidId(configId) &&
@@ -252,7 +325,7 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['blokName', 'subtitle', 'danaNumber', 'danaAccountName', 'customQrisData', 'iuranAmount', 'hidmatAmount', 'reminderEnabled', 'reminderTitle', 'reminderMessage', 'pushBlastId', 'pushTargetUserId', 'updatedAt']) &&
-                       isAdmin();
+                       isPrimaryAdmin();
 
       allow delete: if false;
     }
@@ -270,7 +343,7 @@ service cloud.firestore {
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        (
-                         isAdmin() ||
+                         isPrimaryAdmin() ||
                          (request.auth.uid == residentId && existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid))) ||
                          (request.auth.uid == residentId && incoming().role == 'member' && incoming().hidmatEnabled == false)
                        );
@@ -284,10 +357,38 @@ service cloud.firestore {
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        (
                          (
-                           isAdmin() &&
+                           // Primary Admin (Admin Utama) can edit profiles, toggle hidmat, and promote/demote BOTH Warga and Pengurus Blok
+                           isPrimaryAdmin() &&
                            !(existing().email == 'kfkhoerul05@gmail.com' && incoming().role != 'admin') &&
                            !(residentId == request.auth.uid && existing().role == 'admin' && incoming().role != 'admin') &&
                            incoming().diff(existing()).affectedKeys().hasOnly(['username', 'name', 'house', 'phone', 'role', 'roleLabel', 'hidmatEnabled', 'updatedAt'])
+                         ) ||
+                         (
+                           // Pengurus Blok can edit non-admin (member) profiles/hidmat and promote/demote delegated roles (capped at 3)
+                           isAdmin() &&
+                           !isPrimaryAdmin() &&
+                           existing().email != 'kfkhoerul05@gmail.com' &&
+                           residentId != request.auth.uid &&
+                           (
+                             (
+                               existing().role == 'member' &&
+                               incoming().diff(existing()).affectedKeys().hasOnly(['username', 'name', 'house', 'phone', 'role', 'roleLabel', 'hidmatEnabled', 'updatedAt']) &&
+                               (
+                                 incoming().role == 'member' ||
+                                 (
+                                   incoming().role == 'admin' &&
+                                   existsAfter(/databases/$(database)/documents/admin_meta/delegated_counter) &&
+                                   getAfter(/databases/$(database)/documents/admin_meta/delegated_counter).data.count <= 3
+                                 )
+                               )
+                             ) ||
+                             (
+                               existing().role == 'admin' &&
+                               incoming().role == 'member' &&
+                               incoming().hidmatEnabled == existing().hidmatEnabled &&
+                               incoming().diff(existing()).affectedKeys().hasOnly(['role', 'roleLabel', 'updatedAt'])
+                             )
+                           )
                          ) ||
                          (
                            request.auth.uid == residentId &&
@@ -312,9 +413,10 @@ service cloud.firestore {
                          )
                        );
 
+      // Only Primary Admin (Admin Utama) can delete resident or pengurus blok accounts
       allow delete: if isSignedIn() &&
                        isValidId(residentId) &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        residentId != request.auth.uid &&
                        existing().email != 'kfkhoerul05@gmail.com';
     }
@@ -327,7 +429,7 @@ service cloud.firestore {
                        isValidId(paymentId) &&
                        isValidPayment(incoming()) &&
                        incoming().keys().hasAll(['userId', 'month', 'type', 'amount', 'status', 'dateLabel', 'method', 'note', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'month', 'type', 'amount', 'status', 'dateLabel', 'method', 'note', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'month', 'type', 'amount', 'status', 'dateLabel', 'method', 'note', 'receiptImageUrl', 'receiptOcrText', 'createdAt', 'updatedAt']) &&
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        (
@@ -346,7 +448,7 @@ service cloud.firestore {
                        (
                          (
                            isAdmin() &&
-                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'updatedAt'])
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'receiptImageUrl', 'receiptOcrText', 'updatedAt'])
                          ) ||
                          (
                            incoming().userId == request.auth.uid &&
@@ -356,7 +458,7 @@ service cloud.firestore {
                            ) &&
                            incoming().status == 'pending' &&
                            incoming().method != 'Tagihan Otomatis' &&
-                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'updatedAt'])
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount', 'dateLabel', 'method', 'note', 'receiptImageUrl', 'receiptOcrText', 'updatedAt'])
                          )
                        );
 
@@ -412,14 +514,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Primary Admin ONLY: Webhook DANA configuration
     match /admin_configs/{configId} {
-      allow get: if isSignedIn() && isValidId(configId) && configId == 'dana_webhook' && isAdmin();
+      allow get: if isSignedIn() && isValidId(configId) && configId == 'dana_webhook' && isPrimaryAdmin();
       allow list: if false;
 
       allow create: if isSignedIn() &&
                        isValidId(configId) &&
                        configId == 'dana_webhook' &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        isValidAdminWebhookConfig(incoming()) &&
                        incoming().keys().hasAll(['webhookUrl', 'webhookSecret', 'relayFromAndroidEnabled', 'autoVerifyWebhookEvents', 'updatedByUid', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['webhookUrl', 'webhookSecret', 'relayFromAndroidEnabled', 'autoVerifyWebhookEvents', 'updatedByUid', 'createdAt', 'updatedAt']) &&
@@ -429,7 +532,7 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                        isValidId(configId) &&
                        configId == 'dana_webhook' &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        isValidAdminWebhookConfig(incoming()) &&
                        incoming().createdAt == existing().createdAt &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
@@ -438,13 +541,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Primary Admin ONLY: Live DANA webhook events
     match /dana_webhook_events/{eventId} {
-      allow get: if isSignedIn() && isValidId(eventId) && isAdmin();
-      allow list: if isSignedIn() && isAdmin();
+      allow get: if isSignedIn() && isValidId(eventId) && isPrimaryAdmin();
+      allow list: if isSignedIn() && isPrimaryAdmin();
 
       allow create: if isSignedIn() &&
                        isValidId(eventId) &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        isValidDanaWebhookEvent(incoming(), eventId) &&
                        incoming().keys().hasAll(['referenceId', 'source', 'amount', 'senderName', 'senderPhone', 'houseHint', 'monthHint', 'paymentTypeHint', 'rawPayload', 'status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['referenceId', 'source', 'amount', 'senderName', 'senderPhone', 'houseHint', 'monthHint', 'paymentTypeHint', 'rawPayload', 'status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'createdAt', 'updatedAt']) &&
@@ -453,7 +557,7 @@ service cloud.firestore {
 
       allow update: if isSignedIn() &&
                        isValidId(eventId) &&
-                       isAdmin() &&
+                       isPrimaryAdmin() &&
                        isValidDanaWebhookEvent(incoming(), eventId) &&
                        incoming().referenceId == existing().referenceId &&
                        incoming().source == existing().source &&
@@ -462,7 +566,89 @@ service cloud.firestore {
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'matchedPaymentId', 'matchedSummary', 'verifiedByUid', 'updatedAt']);
 
-      allow delete: if isSignedIn() && isValidId(eventId) && isAdmin();
+      allow delete: if isSignedIn() && isValidId(eventId) && isPrimaryAdmin();
+    }
+
+    // Live Online Presence: Owner writes own presence, Primary Admin monitors all online accounts live
+    match /user_presence/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isPrimaryAdmin());
+      allow list: if isPrimaryAdmin();
+
+      allow create, update: if isSignedIn() &&
+                               isValidId(uid) &&
+                               request.auth.uid == uid &&
+                               isValidUserPresence(incoming(), uid) &&
+                               incoming().keys().hasAll(['userId', 'name', 'house', 'email', 'role', 'roleLabel', 'online', 'activeScreen', 'lastSeenMillis', 'updatedAt']) &&
+                               incoming().keys().hasOnly(['userId', 'name', 'house', 'email', 'role', 'roleLabel', 'online', 'activeScreen', 'lastSeenMillis', 'updatedAt']) &&
+                               incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow delete: if false;
+    }
+
+    // Live Activity Analytics Logs: Signed-in users append own activity, Primary Admin reads live report
+    match /activity_logs/{logId} {
+      allow get: if isPrimaryAdmin() && isValidId(logId);
+      allow list: if isPrimaryAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidActivityLog(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'userName', 'userEmail', 'userRole', 'house', 'actionType', 'screen', 'detail', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'userName', 'userEmail', 'userRole', 'house', 'actionType', 'screen', 'detail', 'createdAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time;
+
+      allow update, delete: if false;
+    }
+
+    // Keuangan Blok (Masuk, Keluar, Kas Blok): Semua akun login bisa melihat, HANYA Admin Utama bisa menulis
+    match /finance_entries/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId);
+      allow list: if isSignedIn();
+
+      allow create: if isPrimaryAdmin() &&
+                       isValidId(entryId) &&
+                       isValidFinanceEntry(incoming()) &&
+                       incoming().createdByUid == request.auth.uid &&
+                       incoming().keys().hasAll(['kind', 'title', 'category', 'amount', 'month', 'dateLabel', 'note', 'createdByUid', 'createdByName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['kind', 'title', 'category', 'amount', 'month', 'dateLabel', 'note', 'createdByUid', 'createdByName', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isPrimaryAdmin() &&
+                       isValidId(entryId) &&
+                       isValidFinanceEntry(incoming()) &&
+                       incoming().createdByUid == existing().createdByUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['kind', 'title', 'category', 'amount', 'month', 'dateLabel', 'note', 'updatedAt']);
+
+      allow delete: if isPrimaryAdmin() && isValidId(entryId);
+    }
+
+    // Rencana Anggaran Blok: Semua akun login bisa melihat, HANYA Admin Utama bisa menulis
+    match /budget_plans/{planId} {
+      allow get: if isSignedIn() && isValidId(planId);
+      allow list: if isSignedIn();
+
+      allow create: if isPrimaryAdmin() &&
+                       isValidId(planId) &&
+                       isValidBudgetPlan(incoming()) &&
+                       incoming().createdByUid == request.auth.uid &&
+                       incoming().keys().hasAll(['title', 'category', 'month', 'plannedAmount', 'realizedAmount', 'status', 'note', 'createdByUid', 'updatedByName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'category', 'month', 'plannedAmount', 'realizedAmount', 'status', 'note', 'createdByUid', 'updatedByName', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isPrimaryAdmin() &&
+                       isValidId(planId) &&
+                       isValidBudgetPlan(incoming()) &&
+                       incoming().createdByUid == existing().createdByUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'month', 'plannedAmount', 'realizedAmount', 'status', 'note', 'updatedByName', 'updatedAt']);
+
+      allow delete: if isPrimaryAdmin() && isValidId(planId);
     }
   }
 }

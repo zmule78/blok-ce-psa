@@ -1,23 +1,28 @@
 package com.example
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +42,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -56,17 +60,20 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.Newspaper
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -101,8 +108,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,101 +138,142 @@ import com.example.data.model.computeMonthSummary
 import com.example.data.model.currentBillingPeriodCode
 import com.example.data.model.formatPeriodCode
 import com.example.data.model.formatRupiah
+import com.example.data.model.monthLabel
 import com.example.data.model.monthNameOnly
 import com.example.data.model.parsePeriodCode
 import com.example.data.remote.authStateFlow
 import com.example.data.remote.signOut
 import com.example.data.repository.BlokCeRepository
 import com.example.data.repository.ConnectivityObserver
+import com.example.notification.HimbauanNotificationHelper
 import com.example.security.BiometricAuthHelper
 import com.example.security.BiometricAvailability
 import com.example.security.BiometricSecurityState
+import com.example.ui.components.AppLaunchSplashOverlay
 import com.example.ui.components.BiometricLockOverlay
+import com.example.ui.components.EmphasizedDecelerate
 import com.example.ui.components.LivePulseDot
 import com.example.ui.components.QrisZoomDialog
 import com.example.ui.components.ReminderBlastDialog
+import com.example.ui.components.StaggeredEntrance
+import com.example.ui.components.directionalTabTransition
+import com.example.ui.components.portalSwitchTransition
 import com.example.ui.screens.AccountTab
 import com.example.ui.screens.AdminWargaTab
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.HomeTab
 import com.example.ui.screens.InfoTab
+import com.example.ui.screens.KeuanganTab
 import com.example.ui.screens.PayTab
 import com.example.ui.screens.QrisScannerDialog
+import com.example.ui.screens.ReceiptScannerDialog
 import com.example.ui.theme.Amber600
 import com.example.ui.theme.BlokCePsaTheme
 import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
-import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald800
 import com.example.ui.theme.Emerald950
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate900
 import com.example.ui.theme.Teal800
+import com.example.ui.theme.adaptiveColors
+import com.example.ui.theme.adaptiveFieldColors
 import com.example.ui.viewmodel.MainTab
 import com.example.ui.viewmodel.MainUiState
+import com.example.notification.evaluateResidentPendingNotification
 import com.example.ui.viewmodel.MainViewModel
 import com.example.worker.MonthlyBillingScheduler
+import com.example.worker.PendingPaymentNotificationScheduler
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
+    private var notifOpenTabState by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MonthlyBillingScheduler.ensureMonthlyBillingScheduled(applicationContext)
+        PendingPaymentNotificationScheduler.ensureScheduled(applicationContext)
+        HimbauanNotificationHelper.ensureChannel(applicationContext)
+        notifOpenTabState = intent?.getStringExtra(HimbauanNotificationHelper.EXTRA_OPEN_TAB)
         enableEdgeToEdge()
         setContent {
             BlokCePsaTheme {
-                AppNavigation()
+                AppNavigation(
+                    pendingNotificationTab = notifOpenTabState,
+                    onNotificationTabConsumed = { notifOpenTabState = null }
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notifOpenTabState = intent.getStringExtra(HimbauanNotificationHelper.EXTRA_OPEN_TAB)
     }
 }
 
 @Composable
-fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
+fun AppNavigation(
+    auth: FirebaseAuth = Firebase.auth,
+    pendingNotificationTab: String? = null,
+    onNotificationTabConsumed: () -> Unit = {}
+) {
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
     var skipAutoSignIn by remember { mutableStateOf(false) }
     var preferAdminPortal by remember { mutableStateOf(false) }
     var pendingAdminPortal by remember { mutableStateOf(false) }
     var pendingInviteCode by remember { mutableStateOf("") }
 
-    val user = currentUser
-    if (user == null) {
-        AuthScreen(
-            skipAutoSignIn = skipAutoSignIn,
-            initialAdminPortal = preferAdminPortal,
-            onPrepareAuthIntent = { isAdminMode, code ->
-                pendingAdminPortal = isAdminMode
-                pendingInviteCode = code
-            },
-            onAuthSuccess = {
-                skipAutoSignIn = false
-                preferAdminPortal = false
-            }
-        )
-    } else {
-        key(user.uid) {
-            AuthenticatedShell(
-                currentUserId = user.uid,
-                requestedAdminPortal = pendingAdminPortal,
-                pendingAdminInviteCode = pendingInviteCode,
-                onSignOutRequested = { reopenAdminTab ->
-                    skipAutoSignIn = true
-                    preferAdminPortal = reopenAdminTab
-                    pendingAdminPortal = false
-                    pendingInviteCode = ""
+    var showLaunchSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(780L)
+        showLaunchSplash = false
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = currentUser?.uid,
+            transitionSpec = { portalSwitchTransition() },
+            label = "auth_portal_transition"
+        ) { uid ->
+            if (uid == null) {
+                AuthScreen(
+                    skipAutoSignIn = skipAutoSignIn,
+                    initialAdminPortal = preferAdminPortal,
+                    onPrepareAuthIntent = { isAdminMode, code ->
+                        pendingAdminPortal = isAdminMode
+                        pendingInviteCode = code
+                    },
+                    onAuthSuccess = {
+                        skipAutoSignIn = false
+                        preferAdminPortal = false
+                    }
+                )
+            } else {
+                key(uid) {
+                    AuthenticatedShell(
+                        currentUserId = uid,
+                        requestedAdminPortal = pendingAdminPortal,
+                        pendingAdminInviteCode = pendingInviteCode,
+                        pendingNotificationTab = pendingNotificationTab,
+                        onNotificationTabConsumed = onNotificationTabConsumed,
+                        onSignOutRequested = { reopenAdminTab ->
+                            skipAutoSignIn = true
+                            preferAdminPortal = reopenAdminTab
+                            pendingAdminPortal = false
+                            pendingInviteCode = ""
+                        }
+                    )
                 }
-            )
+            }
         }
+
+        AppLaunchSplashOverlay(visible = showLaunchSplash)
     }
 }
 
@@ -232,9 +282,12 @@ private fun AuthenticatedShell(
     currentUserId: String,
     requestedAdminPortal: Boolean,
     pendingAdminInviteCode: String,
+    pendingNotificationTab: String? = null,
+    onNotificationTabConsumed: () -> Unit = {},
     onSignOutRequested: (reopenAdminTab: Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val ac = adaptiveColors
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
@@ -435,16 +488,114 @@ private fun AuthenticatedShell(
         }
     }
 
+    var notifPermissionGranted by remember(currentUserId) {
+        mutableStateOf(HimbauanNotificationHelper.hasNotificationPermission(context))
+    }
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notifPermissionGranted = granted
+    }
+    LaunchedEffect(currentUserId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !HimbauanNotificationHelper.hasNotificationPermission(context)
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(pendingNotificationTab, state.currentResident) {
+        if (!pendingNotificationTab.isNullOrBlank() && state.currentResident != null) {
+            when (pendingNotificationTab.uppercase()) {
+                "PAY" -> viewModel.selectTab(MainTab.PAY)
+                "INFO" -> viewModel.selectTab(MainTab.INFO)
+                "FINANCE" -> viewModel.selectTab(MainTab.FINANCE)
+                "ACCOUNT" -> viewModel.selectTab(MainTab.ACCOUNT)
+                "ADMIN_WARGA" -> if (state.currentResident?.adminRole == true) viewModel.selectTab(MainTab.ADMIN_WARGA)
+            }
+            onNotificationTabConsumed()
+        }
+    }
+
+    LaunchedEffect(
+        notifPermissionGranted,
+        state.settings.pushBlastId,
+        state.settings.reminderEnabled,
+        state.selectedMonth,
+        state.currentResident,
+        state.userPayments
+    ) {
+        val resident = state.currentResident ?: return@LaunchedEffect
+        if (resident.adminRole) return@LaunchedEffect
+        val target = state.settings.pushTargetUserId.ifBlank { "all_unpaid" }
+        val activeMonth = currentBillingPeriodCode()
+        if (target == "all_pending") {
+            val dayKey = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val pendingPayload = evaluateResidentPendingNotification(
+                resident = resident,
+                monthPayments = state.userPayments,
+                currentMonth = activeMonth,
+                dayKey = "${dayKey}_${state.settings.pushBlastId}",
+                settings = state.settings
+            )
+            if (pendingPayload != null) {
+                HimbauanNotificationHelper.dispatchPendingStatusNotification(
+                    context = context,
+                    alertKey = pendingPayload.alertKey,
+                    title = pendingPayload.title,
+                    message = pendingPayload.message,
+                    targetTabName = pendingPayload.targetTabName
+                )
+            }
+            return@LaunchedEffect
+        }
+        val sum = computeMonthSummary(resident, state.userPayments, state.selectedMonth)
+        val totalDue = (if (sum.iuranStatus != DuesStatus.PAID) state.settings.iuranAmount else 0L) +
+            (if (sum.hidmatActive && sum.hidmatStatus != DuesStatus.PAID) state.settings.hidmatAmount else 0L)
+        val targetMatch = target.isBlank() ||
+            target == "all_unpaid" ||
+            target == resident.id
+        if (totalDue > 0L && (state.settings.pushBlastId > 0L || state.settings.reminderEnabled) && targetMatch) {
+            val alertKey = "himbauan_${state.settings.pushBlastId}_${state.selectedMonth}_${resident.id}"
+            val notifTitle = state.settings.reminderTitle.ifBlank {
+                "Himbauan Iuran ${monthLabel(state.selectedMonth)}"
+            }
+            val notifBody = "Tagihan ${resident.house} sebesar ${formatRupiah(totalDue)} menunggu pembayaran. ${state.settings.reminderMessage}"
+            HimbauanNotificationHelper.dispatchHimbauanIfNew(
+                context = context,
+                alertKey = alertKey,
+                title = notifTitle,
+                message = notifBody,
+                targetTabName = "PAY"
+            )
+        }
+    }
+
+    LaunchedEffect(notifPermissionGranted, state.announcements, state.currentResident) {
+        if (state.currentResident == null) return@LaunchedEffect
+        val urgent = state.announcements.firstOrNull { it.urgent && it.published } ?: return@LaunchedEffect
+        HimbauanNotificationHelper.dispatchHimbauanIfNew(
+            context = context,
+            alertKey = "urgent_${urgent.id}",
+            title = "Info Penting: ${urgent.title}",
+            message = urgent.content,
+            targetTabName = "INFO"
+        )
+    }
+
     DisposableEffect(lifecycleOwner, currentUserId) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
+                    viewModel.setPresenceOnline(false)
                     if (!isBiometricPromptActive) {
                         lastBackgroundElapsedMs = SystemClock.elapsedRealtime()
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     viewModel.refreshDanaListenerStatus()
+                    viewModel.setPresenceOnline(true)
+                    notifPermissionGranted = HimbauanNotificationHelper.hasNotificationPermission(context)
                     val avail = BiometricAuthHelper.checkAvailability(context)
                     val shouldRelock = biometricState.portalLockEnabled &&
                         avail == BiometricAvailability.AVAILABLE &&
@@ -490,7 +641,8 @@ private fun AuthenticatedShell(
     val navItems = remember(isAdmin) {
         buildList {
             add(NavDestination(MainTab.HOME, "Beranda", Icons.Filled.Home, Icons.Outlined.Home, "tab_home"))
-            add(NavDestination(MainTab.PAY, "Bayar", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet, "tab_pay"))
+            add(NavDestination(MainTab.PAY, "Bayar", Icons.Filled.ReceiptLong, Icons.Outlined.ReceiptLong, "tab_pay"))
+            add(NavDestination(MainTab.FINANCE, "Keuangan", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet, "tab_finance"))
             add(NavDestination(MainTab.INFO, "Info", Icons.Filled.Newspaper, Icons.Outlined.Newspaper, "tab_info"))
             if (isAdmin) {
                 add(NavDestination(MainTab.ADMIN_WARGA, "Admin", Icons.Filled.People, Icons.Outlined.People, "tab_admin"))
@@ -503,18 +655,18 @@ private fun AuthenticatedShell(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(Slate50)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         val useNavRail = maxWidth >= 600.dp
 
         Scaffold(
-            containerColor = Slate50,
+            containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets.safeDrawing,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             bottomBar = {
                 if (!useNavRail) {
                     NavigationBar(
-                        containerColor = Color.White,
+                        containerColor = ac.cardContainer,
                         tonalElevation = 8.dp
                     ) {
                         navItems.forEach { item ->
@@ -531,15 +683,18 @@ private fun AuthenticatedShell(
                                 label = {
                                     Text(
                                         text = item.label,
-                                        style = MaterialTheme.typography.labelSmall
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Emerald700,
-                                    selectedTextColor = Emerald700,
-                                    indicatorColor = Emerald50,
-                                    unselectedIconColor = Slate500,
-                                    unselectedTextColor = Slate500
+                                    selectedIconColor = ac.emeraldText,
+                                    selectedTextColor = ac.emeraldText,
+                                    indicatorColor = ac.emeraldSurface,
+                                    unselectedIconColor = ac.textMuted,
+                                    unselectedTextColor = ac.textMuted
                                 ),
                                 modifier = Modifier.testTag(item.tag)
                             )
@@ -555,7 +710,7 @@ private fun AuthenticatedShell(
             ) {
                 if (useNavRail) {
                     NavigationRail(
-                        containerColor = Color.White,
+                        containerColor = ac.cardContainer,
                         modifier = Modifier.fillMaxHeight()
                     ) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -572,11 +727,11 @@ private fun AuthenticatedShell(
                                 },
                                 label = { Text(item.label) },
                                 colors = NavigationRailItemDefaults.colors(
-                                    selectedIconColor = Emerald700,
-                                    selectedTextColor = Emerald700,
-                                    indicatorColor = Emerald50,
-                                    unselectedIconColor = Slate500,
-                                    unselectedTextColor = Slate500
+                                    selectedIconColor = ac.emeraldText,
+                                    selectedTextColor = ac.emeraldText,
+                                    indicatorColor = ac.emeraldSurface,
+                                    unselectedIconColor = ac.textMuted,
+                                    unselectedTextColor = ac.textMuted
                                 ),
                                 modifier = Modifier.testTag(item.tag)
                             )
@@ -590,7 +745,12 @@ private fun AuthenticatedShell(
                         .fillMaxHeight(),
                     contentAlignment = Alignment.TopCenter
                 ) {
-                    if (state.isLoading) {
+                    AnimatedContent(
+                        targetState = state.isLoading,
+                        transitionSpec = { portalSwitchTransition() },
+                        label = "portal_loading_transition"
+                    ) { loading ->
+                    if (loading) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -603,33 +763,53 @@ private fun AuthenticatedShell(
                                 Text(
                                     text = "Memuat data warga...",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = Slate500
+                                    color = ac.textSecondary
                                 )
                             }
                         }
                     } else {
+                        val tabScrollState = rememberScrollState()
+                        LaunchedEffect(state.activeTab) {
+                            tabScrollState.scrollTo(0)
+                        }
                         Column(
                             modifier = Modifier
                                 .widthIn(max = 600.dp)
                                 .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            TopBlokHeader(
-                                state = state,
-                                onSelectMonth = viewModel::selectMonth
+                            StaggeredEntrance(delayMillis = 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 8.dp)
+                                        .testTag("pinned_blok_header_container")
+                                ) {
+                                    TopBlokHeader(
+                                        state = state,
+                                        onSelectMonth = viewModel::selectMonth
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(
+                                color = ac.borderSubtle.copy(alpha = 0.65f),
+                                thickness = 1.dp
                             )
 
-                            AnimatedContent(
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .verticalScroll(tabScrollState)
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                AnimatedContent(
                                 targetState = state.activeTab,
                                 transitionSpec = {
-                                    val forward = targetState.ordinal >= initialState.ordinal
-                                    (fadeIn(tween(220)) + slideInHorizontally(tween(240)) { w ->
-                                        if (forward) w / 10 else -w / 10
-                                    }) togetherWith (fadeOut(tween(160)) + slideOutHorizontally(tween(200)) { w ->
-                                        if (forward) -w / 12 else w / 12
-                                    })
+                                    directionalTabTransition(
+                                        forward = targetState.ordinal >= initialState.ordinal
+                                    )
                                 },
                                 label = "main_tab_transition"
                             ) { activeTab ->
@@ -670,6 +850,8 @@ private fun AuthenticatedShell(
                                         onOpenQrisZoom = viewModel::openQrisZoom,
                                         onOpenQrisScanner = viewModel::openQrisScanner,
                                         onClearScannedQris = viewModel::clearScannedQris,
+                                        onOpenReceiptScanner = viewModel::openReceiptScanner,
+                                        onClearScannedReceipt = viewModel::clearScannedReceipt,
                                         requireBiometricConfirm = biometricState.requireOnPayment &&
                                             biometricState.availability == BiometricAvailability.AVAILABLE,
                                         onRequestBiometricForPayment = { amount, onVerified ->
@@ -687,6 +869,17 @@ private fun AuthenticatedShell(
                                             )
                                         },
                                         onSubmitPayment = viewModel::submitPayment
+                                    )
+                                    MainTab.FINANCE -> KeuanganTab(
+                                        state = state,
+                                        onSaveFinanceEntry = viewModel::adminSaveFinanceEntry,
+                                        onDeleteFinanceEntry = viewModel::adminDeleteFinanceEntry,
+                                        onSaveBudgetPlan = viewModel::adminSaveBudgetPlan,
+                                        onDeleteBudgetPlan = viewModel::adminDeleteBudgetPlan,
+                                        onExportCompleted = { formatLabel, msg ->
+                                            viewModel.logFinanceExport(formatLabel)
+                                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                                        }
                                     )
                                     MainTab.INFO -> InfoTab(
                                         state = state,
@@ -710,6 +903,8 @@ private fun AuthenticatedShell(
                                                 onNavigateToInfo = { viewModel.selectTab(MainTab.INFO) },
                                                 onPushBlast = { viewModel.adminSendPushBlast("all_unpaid") },
                                                 onToggleReminder = viewModel::adminToggleReminder,
+                                                onTogglePendingNotifier = viewModel::adminTogglePendingNotifierService,
+                                                onTriggerPendingNotifications = viewModel::adminTriggerPendingPushNotificationNow,
                                                 onGenerateMonthlyBills = viewModel::adminGenerateMonthlyBills,
                                                 onToggleDanaAutoVerify = viewModel::setDanaAutoVerifyEnabled,
                                                 onVerifyLiveDanaManual = viewModel::adminVerifyLiveDanaManual,
@@ -773,6 +968,8 @@ private fun AuthenticatedShell(
 
                             Spacer(modifier = Modifier.height(12.dp))
                         }
+                        }
+                    }
                     }
                 }
             }
@@ -801,15 +998,25 @@ private fun AuthenticatedShell(
         )
     }
 
+    if (state.showReceiptScanner) {
+        ReceiptScannerDialog(
+            onReceiptScanned = viewModel::onReceiptScanned,
+            onDismiss = viewModel::closeReceiptScanner
+        )
+    }
+
     if (state.showAdminAccessDeniedDialog) {
         var dialogInviteCode by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = viewModel::dismissAdminAccessDeniedDialog,
+            containerColor = ac.cardContainer,
+            titleContentColor = ac.textPrimary,
+            textContentColor = ac.textPrimary,
             icon = {
                 Icon(
                     imageVector = Icons.Filled.AdminPanelSettings,
                     contentDescription = null,
-                    tint = Emerald700
+                    tint = ac.emeraldText
                 )
             },
             title = { Text("Akses Khusus Admin") },
@@ -817,7 +1024,8 @@ private fun AuthenticatedShell(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = "Akun ${state.currentResident?.email.orEmpty()} belum terdaftar sebagai Admin. Masuk dengan akun Google Admin utama (${BlokCeRepository.BOOTSTRAPPED_ADMIN_EMAIL}) atau masukkan Kode Undangan Admin.",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ac.textSecondary
                     )
                     OutlinedTextField(
                         value = dialogInviteCode,
@@ -825,6 +1033,8 @@ private fun AuthenticatedShell(
                         label = { Text("Kode Undangan Admin") },
                         placeholder = { Text("Contoh: CE-ADM-XXXX") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("dialog_admin_invite_input")
@@ -846,7 +1056,10 @@ private fun AuthenticatedShell(
                             )
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Emerald700,
+                        contentColor = Color.White
+                    ),
                     modifier = Modifier.testTag("switch_admin_google_account_button")
                 ) {
                     Text(if (dialogInviteCode.trim().length >= 6) "Aktifkan Kode" else "Ganti Akun Admin")
@@ -857,7 +1070,7 @@ private fun AuthenticatedShell(
                     onClick = viewModel::dismissAdminAccessDeniedDialog,
                     modifier = Modifier.testTag("continue_as_resident_button")
                 ) {
-                    Text("Lanjut sebagai Warga")
+                    Text("Lanjut sebagai Warga", color = ac.textSecondary)
                 }
             }
         )
@@ -887,8 +1100,9 @@ private fun AuthenticatedShell(
 
     AnimatedVisibility(
         visible = biometricState.isPortalLocked,
-        enter = fadeIn(tween(180)),
-        exit = fadeOut(tween(220))
+        enter = fadeIn(tween(240, easing = EmphasizedDecelerate)) +
+            scaleIn(initialScale = 0.95f, animationSpec = tween(260, easing = EmphasizedDecelerate)),
+        exit = fadeOut(tween(200)) + scaleOut(targetScale = 1.03f, animationSpec = tween(200))
     ) {
         BiometricLockOverlay(
             resident = state.currentResident,
@@ -954,18 +1168,17 @@ private fun TopBlokHeader(
                     modifier = Modifier.weight(1f)
                 ) {
                     Surface(
-                        color = Color.White.copy(alpha = 0.18f),
+                        color = Color(0xFF09523E),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.size(44.dp)
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+                        modifier = Modifier.size(46.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Filled.Home,
-                                contentDescription = null,
-                                tint = Emerald100,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_art),
+                            contentDescription = "Logo Blok CE PSA",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                     Column {
                         Row(
@@ -1084,6 +1297,7 @@ private fun PeriodPickerDialog(
     onSelectPeriod: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     val (initYear, initMonth) = remember(initialPeriodCode) { parsePeriodCode(initialPeriodCode) }
     var activeYear by remember(initialPeriodCode) { mutableIntStateOf(initYear) }
     val yearListState = rememberLazyListState()
@@ -1096,7 +1310,8 @@ private fun PeriodPickerDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
             Column(
@@ -1106,20 +1321,20 @@ private fun PeriodPickerDialog(
                 Text(
                     text = "Pilih Periode (Tahun & Bulan)",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Data periode tersedia dari tahun $MIN_BILLING_YEAR sampai dengan $MAX_BILLING_YEAR.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate500
+                    color = ac.textMuted
                 )
 
                 // Year stepper control
                 Surface(
-                    color = Emerald50,
+                    color = ac.emeraldSurface,
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Emerald100),
+                    border = BorderStroke(1.dp, ac.emeraldBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -1139,19 +1354,19 @@ private fun PeriodPickerDialog(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                 contentDescription = "Tahun sebelumnya",
-                                tint = if (activeYear > MIN_BILLING_YEAR) Emerald700 else Slate500
+                                tint = if (activeYear > MIN_BILLING_YEAR) ac.emeraldText else ac.textMuted
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "TAHUN",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Emerald700
+                                color = ac.emeraldText
                             )
                             Text(
                                 text = activeYear.toString(),
                                 style = MaterialTheme.typography.titleLarge,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.Black
                             )
                         }
@@ -1165,7 +1380,7 @@ private fun PeriodPickerDialog(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = "Tahun berikutnya",
-                                tint = if (activeYear < MAX_BILLING_YEAR) Emerald700 else Slate500
+                                tint = if (activeYear < MAX_BILLING_YEAR) ac.emeraldText else ac.textMuted
                             )
                         }
                     }
@@ -1180,7 +1395,7 @@ private fun PeriodPickerDialog(
                     items(BILLING_YEARS) { year ->
                         val selected = year == activeYear
                         Surface(
-                            color = if (selected) Emerald700 else Slate100,
+                            color = if (selected) Emerald700 else ac.subtleContainer,
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .heightIn(min = 40.dp)
@@ -1195,7 +1410,7 @@ private fun PeriodPickerDialog(
                                 Text(
                                     text = year.toString(),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = if (selected) Color.White else Slate600,
+                                    color = if (selected) Color.White else ac.textSecondary,
                                     fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold
                                 )
                             }
@@ -1214,11 +1429,11 @@ private fun PeriodPickerDialog(
                                 val monthNum = rowIdx * 3 + colIdx + 1
                                 val isSelected = activeYear == initYear && monthNum == initMonth
                                 Surface(
-                                    color = if (isSelected) Emerald700 else Slate50,
+                                    color = if (isSelected) Emerald700 else ac.cardElevated,
                                     shape = RoundedCornerShape(12.dp),
                                     border = BorderStroke(
                                         1.dp,
-                                        if (isSelected) Emerald700 else Slate200
+                                        if (isSelected) Emerald700 else ac.borderSubtle
                                     ),
                                     modifier = Modifier
                                         .weight(1f)
@@ -1236,7 +1451,7 @@ private fun PeriodPickerDialog(
                                         Text(
                                             text = INDONESIAN_MONTHS_SHORT[monthNum - 1],
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = if (isSelected) Color.White else Slate900,
+                                            color = if (isSelected) Color.White else ac.textPrimary,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center
                                         )
@@ -1250,7 +1465,7 @@ private fun PeriodPickerDialog(
                 Text(
                     text = "Dipilih: ${INDONESIAN_MONTHS[initMonth - 1]} $initYear",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate600
+                    color = ac.textSecondary
                 )
 
                 Row(
@@ -1262,10 +1477,10 @@ private fun PeriodPickerDialog(
                         onClick = { onSelectPeriod(currentBillingPeriodCode()) },
                         modifier = Modifier.testTag("current_period_button")
                     ) {
-                        Text("Bulan Ini", color = Emerald700, fontWeight = FontWeight.Bold)
+                        Text("Bulan Ini", color = ac.emeraldText, fontWeight = FontWeight.Bold)
                     }
                     TextButton(onClick = onDismiss) {
-                        Text("Tutup", color = Slate600)
+                        Text("Tutup", color = ac.textSecondary)
                     }
                 }
             }

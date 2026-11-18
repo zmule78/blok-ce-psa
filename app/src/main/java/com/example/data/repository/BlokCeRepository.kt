@@ -5,23 +5,29 @@ import com.example.data.local.DanaLiveEventEntity
 import com.example.data.local.PendingPaymentEntity
 import com.example.data.local.toEntity
 import com.example.data.model.AUTO_BILL_METHOD
+import com.example.data.model.ActivityLog
 import com.example.data.model.AdminInvite
 import com.example.data.model.AdminRecord
 import com.example.data.model.Announcement
+import com.example.data.model.BudgetPlan
 import com.example.data.model.DanaWebhookConfig
 import com.example.data.model.DanaWebhookEvent
 import com.example.data.model.DuesStatus
+import com.example.data.model.FinanceEntry
+import com.example.data.model.MAX_DELEGATED_ADMINS_BY_PENGURUS
 import com.example.data.model.MonthlySummary
 import com.example.data.model.PRIMARY_ADMIN_EMAIL
 import com.example.data.model.Payment
 import com.example.data.model.Resident
 import com.example.data.model.SystemSettings
+import com.example.data.model.UserPresence
 import com.example.data.model.computeFundRecap
 import com.example.data.model.computeMonthSummary
 import com.example.data.model.formatRupiah
 import com.example.data.model.isWithinBillingHorizon
 import com.example.data.model.monthLabel
 import com.example.data.model.resolveAdminStatus
+import com.google.firebase.firestore.Query
 import com.example.data.remote.OperationType
 import com.example.data.remote.handleFirestoreError
 import com.google.firebase.Firebase
@@ -459,7 +465,9 @@ class BlokCeRepository(
         month: String,
         types: List<Pair<String, Long>>,
         method: String,
-        note: String
+        note: String,
+        receiptImageUrl: String = "",
+        receiptOcrText: String = ""
     ): Result<SubmissionOutcome> {
         val uid = try {
             requireUserId()
@@ -472,6 +480,8 @@ class BlokCeRepository(
         val dateLabel = formattedToday()
         val cleanMethod = method.trim().take(50).ifBlank { "Transfer DANA" }
         val cleanNote = note.trim().take(200)
+        val cleanReceiptUrl = receiptImageUrl.trim().take(250000)
+        val cleanReceiptOcr = receiptOcrText.trim().take(500)
 
         if (!connectivity.isCurrentlyOnline()) {
             for ((type, amount) in types) {
@@ -485,7 +495,9 @@ class BlokCeRepository(
                         amount = amount,
                         dateLabel = dateLabel,
                         method = cleanMethod,
-                        note = cleanNote
+                        note = cleanNote,
+                        receiptImageUrl = cleanReceiptUrl,
+                        receiptOcrText = cleanReceiptOcr
                     )
                 )
             }
@@ -503,18 +515,19 @@ class BlokCeRepository(
                     val existingMethod = existing.getString("method") ?: ""
                     if (existingStatus == "paid") continue
                     if (existingStatus == "pending" && existingMethod != AUTO_BILL_METHOD) continue
-                    docRef.update(
-                        mapOf(
-                            "status" to "pending",
-                            "amount" to amount,
-                            "dateLabel" to dateLabel,
-                            "method" to cleanMethod,
-                            "note" to noteValue,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    ).await()
+                    val updates = mutableMapOf<String, Any>(
+                        "status" to "pending",
+                        "amount" to amount,
+                        "dateLabel" to dateLabel,
+                        "method" to cleanMethod,
+                        "note" to noteValue,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                    if (cleanReceiptUrl.isNotBlank()) updates["receiptImageUrl"] = cleanReceiptUrl
+                    if (cleanReceiptOcr.isNotBlank()) updates["receiptOcrText"] = cleanReceiptOcr
+                    docRef.update(updates).await()
                 } else {
-                    val payload = mapOf(
+                    val payload = mutableMapOf<String, Any>(
                         "userId" to uid,
                         "month" to month,
                         "type" to type,
@@ -526,6 +539,8 @@ class BlokCeRepository(
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
+                    if (cleanReceiptUrl.isNotBlank()) payload["receiptImageUrl"] = cleanReceiptUrl
+                    if (cleanReceiptOcr.isNotBlank()) payload["receiptOcrText"] = cleanReceiptOcr
                     docRef.set(payload).await()
                 }
             }
@@ -545,7 +560,9 @@ class BlokCeRepository(
                             amount = amount,
                             dateLabel = dateLabel,
                             method = cleanMethod,
-                            note = cleanNote
+                            note = cleanNote,
+                            receiptImageUrl = cleanReceiptUrl,
+                            receiptOcrText = cleanReceiptOcr
                         )
                     )
                 }
@@ -573,7 +590,7 @@ class BlokCeRepository(
                 val existing = docRef.get().await()
                 val noteValue = item.note.ifBlank { "Sinkronisasi antrean offline" }
                 if (!existing.exists()) {
-                    val payload = mapOf(
+                    val payload = mutableMapOf<String, Any>(
                         "userId" to uid,
                         "month" to item.month,
                         "type" to item.type,
@@ -585,6 +602,8 @@ class BlokCeRepository(
                         "createdAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
+                    if (item.receiptImageUrl.isNotBlank()) payload["receiptImageUrl"] = item.receiptImageUrl.take(250000)
+                    if (item.receiptOcrText.isNotBlank()) payload["receiptOcrText"] = item.receiptOcrText.take(500)
                     docRef.set(payload).await()
                 } else {
                     val existingStatus = existing.getString("status") ?: ""
@@ -592,16 +611,17 @@ class BlokCeRepository(
                     if (existingStatus == "unpaid" ||
                         (existingStatus == "pending" && existingMethod == AUTO_BILL_METHOD)
                     ) {
-                        docRef.update(
-                            mapOf(
-                                "status" to "pending",
-                                "amount" to item.amount,
-                                "dateLabel" to item.dateLabel,
-                                "method" to item.method,
-                                "note" to noteValue,
-                                "updatedAt" to FieldValue.serverTimestamp()
-                            )
-                        ).await()
+                        val updates = mutableMapOf<String, Any>(
+                            "status" to "pending",
+                            "amount" to item.amount,
+                            "dateLabel" to item.dateLabel,
+                            "method" to item.method,
+                            "note" to noteValue,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                        if (item.receiptImageUrl.isNotBlank()) updates["receiptImageUrl"] = item.receiptImageUrl.take(250000)
+                        if (item.receiptOcrText.isNotBlank()) updates["receiptOcrText"] = item.receiptOcrText.take(500)
+                        docRef.update(updates).await()
                     }
                 }
                 dao.deletePendingPayment(item.id)
@@ -739,6 +759,14 @@ class BlokCeRepository(
         val path = "residents/$targetUid"
         return try {
             requireUserId()
+            val isPrimary = isBootstrappedAdmin(auth.currentUser)
+            val snap = db.collection("residents").document(targetUid).get().await()
+            val targetRole = snap.getString("role") ?: "member"
+            if (!isPrimary && targetRole == "admin") {
+                return Result.failure(
+                    IllegalStateException("Hanya Admin Utama yang dapat mengubah status Hidmat Pengurus Blok.")
+                )
+            }
             db.collection("residents").document(targetUid).update(
                 mapOf(
                     "hidmatEnabled" to enabled,
@@ -758,8 +786,30 @@ class BlokCeRepository(
         val path = "residents/$targetUid"
         return try {
             val uid = requireUserId()
+            if (!isBootstrappedAdmin(auth.currentUser)) {
+                return Result.failure(
+                    IllegalStateException("Hanya Admin Utama ($BOOTSTRAPPED_ADMIN_EMAIL) yang berhak menghapus akun warga atau pengurus blok.")
+                )
+            }
             require(targetUid != uid) { "Tidak dapat menghapus akun admin aktif." }
-            db.collection("residents").document(targetUid).delete().await()
+            val adminSnap = db.collection("admins").get().await()
+            val currentDelegatedCount = adminSnap.documents.count {
+                !(it.getString("email") ?: "").equals(BOOTSTRAPPED_ADMIN_EMAIL, ignoreCase = true)
+            }
+            val hadAdminRecord = adminSnap.documents.any { it.id == targetUid }
+            val batch = db.batch()
+            batch.delete(db.collection("residents").document(targetUid))
+            if (hadAdminRecord) {
+                batch.delete(db.collection("admins").document(targetUid))
+                batch.set(
+                    db.collection("admin_meta").document("delegated_counter"),
+                    mapOf(
+                        "count" to (currentDelegatedCount - 1).coerceAtLeast(0),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+            }
+            batch.commit().await()
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -1135,6 +1185,7 @@ class BlokCeRepository(
         } catch (e: Exception) {
             return Result.failure(e)
         }
+        val isActorPrimary = isBootstrappedAdmin(auth.currentUser)
         if (targetUid == actorUid && !makeAdmin) {
             return Result.failure(IllegalArgumentException("Tidak dapat menurunkan role akun admin Anda sendiri."))
         }
@@ -1154,6 +1205,27 @@ class BlokCeRepository(
                 return Result.failure(
                     IllegalStateException("Admin Utama ($BOOTSTRAPPED_ADMIN_EMAIL) bersifat tetap dan tidak dapat diturunkan.")
                 )
+            }
+
+            val existingAdminsSnap = db.collection("admins").get().await()
+            val delegatedAdminIds = existingAdminsSnap.documents
+                .filter { !(it.getString("email") ?: "").equals(BOOTSTRAPPED_ADMIN_EMAIL, ignoreCase = true) }
+                .map { it.id }
+                .toSet()
+            val alreadyDelegated = targetUid in delegatedAdminIds
+
+            if (!isActorPrimary && makeAdmin && !alreadyDelegated &&
+                delegatedAdminIds.size >= MAX_DELEGATED_ADMINS_BY_PENGURUS
+            ) {
+                return Result.failure(
+                    IllegalStateException("Pengurus Blok maksimal hanya dapat memilih $MAX_DELEGATED_ADMINS_BY_PENGURUS akun admin tambahan.")
+                )
+            }
+
+            val nextCount = when {
+                makeAdmin && !alreadyDelegated -> delegatedAdminIds.size + 1
+                !makeAdmin && alreadyDelegated -> (delegatedAdminIds.size - 1).coerceAtLeast(0)
+                else -> delegatedAdminIds.size
             }
 
             val cleanRole = if (makeAdmin) "admin" else "member"
@@ -1188,6 +1260,13 @@ class BlokCeRepository(
             } else {
                 batch.delete(adminRef)
             }
+            batch.set(
+                db.collection("admin_meta").document("delegated_counter"),
+                mapOf(
+                    "count" to nextCount,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
             batch.commit().await()
             dao.upsertResident(target.copy(role = cleanRole, roleLabel = cleanLabel).toEntity())
             Result.success(Unit)
@@ -1214,6 +1293,7 @@ class BlokCeRepository(
         } catch (e: Exception) {
             return Result.failure(e)
         }
+        val isActorPrimary = isBootstrappedAdmin(auth.currentUser)
         val cleanUsername = username.trim().lowercase(Locale.ROOT).replace(" ", "").take(60)
         val cleanName = name.trim().take(120)
         val cleanHouse = house.trim().take(40)
@@ -1233,6 +1313,11 @@ class BlokCeRepository(
                 DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
             ) ?: return Result.failure(IllegalArgumentException("Data warga tidak valid."))
 
+            if (!isActorPrimary && target.adminRole) {
+                return Result.failure(
+                    IllegalStateException("Hanya Admin Utama yang dapat menyunting profil Pengurus Blok.")
+                )
+            }
             if (target.isPermanentPrimaryEmail && !makeAdmin) {
                 return Result.failure(
                     IllegalStateException("Admin Utama ($BOOTSTRAPPED_ADMIN_EMAIL) bersifat tetap dan tidak dapat diturunkan.")
@@ -1240,6 +1325,21 @@ class BlokCeRepository(
             }
             if (targetUid == actorUid && !makeAdmin) {
                 return Result.failure(IllegalArgumentException("Tidak dapat menurunkan role akun Anda sendiri."))
+            }
+
+            val existingAdminsSnap = db.collection("admins").get().await()
+            val delegatedAdminIds = existingAdminsSnap.documents
+                .filter { !(it.getString("email") ?: "").equals(BOOTSTRAPPED_ADMIN_EMAIL, ignoreCase = true) }
+                .map { it.id }
+                .toSet()
+            val alreadyDelegated = targetUid in delegatedAdminIds
+
+            if (!isActorPrimary && makeAdmin && !alreadyDelegated &&
+                delegatedAdminIds.size >= MAX_DELEGATED_ADMINS_BY_PENGURUS
+            ) {
+                return Result.failure(
+                    IllegalStateException("Pengurus Blok maksimal hanya dapat memilih $MAX_DELEGATED_ADMINS_BY_PENGURUS akun admin tambahan.")
+                )
             }
 
             val finalRole = if (target.isPermanentPrimaryEmail || makeAdmin) "admin" else "member"
@@ -1265,6 +1365,11 @@ class BlokCeRepository(
             )
             if (!target.isPermanentPrimaryEmail) {
                 val adminRef = db.collection("admins").document(targetUid)
+                val nextCount = when {
+                    finalRole == "admin" && !alreadyDelegated -> delegatedAdminIds.size + 1
+                    finalRole != "admin" && alreadyDelegated -> (delegatedAdminIds.size - 1).coerceAtLeast(0)
+                    else -> delegatedAdminIds.size
+                }
                 if (finalRole == "admin") {
                     batch.set(
                         adminRef,
@@ -1280,6 +1385,13 @@ class BlokCeRepository(
                 } else {
                     batch.delete(adminRef)
                 }
+                batch.set(
+                    db.collection("admin_meta").document("delegated_counter"),
+                    mapOf(
+                        "count" to nextCount,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
             }
             batch.commit().await()
             dao.upsertResident(
@@ -2124,6 +2236,356 @@ class BlokCeRepository(
         return try {
             requireUserId()
             db.collection("dana_webhook_events").document(eventId).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, path)
+            Result.failure(e)
+        }
+    }
+
+    // --- LIVE ONLINE PRESENCE & ACTIVITY ANALYTICS (ADMIN UTAMA MONITOR) ---
+
+    suspend fun upsertUserPresence(
+        resident: Resident?,
+        activeScreen: String,
+        online: Boolean
+    ) {
+        val user = auth.currentUser ?: return
+        val uid = user.uid
+        val path = "user_presence/$uid"
+        try {
+            val payload = mapOf(
+                "userId" to uid,
+                "name" to (resident?.name?.ifBlank { null } ?: user.displayName ?: "Warga").take(120),
+                "house" to (resident?.house?.ifBlank { null } ?: "-").take(40),
+                "email" to (resident?.email?.ifBlank { null } ?: user.email ?: "").take(120),
+                "role" to (resident?.role ?: "member"),
+                "roleLabel" to (resident?.roleLabel?.ifBlank { null } ?: "Warga / Member").take(60),
+                "online" to online,
+                "activeScreen" to activeScreen.take(60),
+                "lastSeenMillis" to System.currentTimeMillis(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            db.collection("user_presence").document(uid).set(payload).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Presence heartbeat failures should remain silent so UX is uninterrupted
+        }
+    }
+
+    fun observeOnlinePresence(): Flow<List<UserPresence>> = flow {
+        val activeUid = requireUserId()
+        val path = "user_presence"
+        emitAll(
+            db.collection("user_presence")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        UserPresence::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ).sortedWith(
+                        compareByDescending<UserPresence> { it.isEffectivelyOnline() }
+                            .thenByDescending { it.lastSeenMillis }
+                    )
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val ex = firestoreError ?: (error as? Exception)
+                    if (ex != null && auth.currentUser?.uid == activeUid) {
+                        handleFirestoreError(ex, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun logActivity(
+        resident: Resident?,
+        actionType: String,
+        screen: String,
+        detail: String
+    ) {
+        val user = auth.currentUser ?: return
+        val logId = "log_${System.currentTimeMillis()}_${Random.nextInt(1000, 9999)}"
+        try {
+            val payload = mapOf(
+                "userId" to user.uid,
+                "userName" to (resident?.name?.ifBlank { null } ?: user.displayName ?: "Pengguna").take(120),
+                "userEmail" to (resident?.email?.ifBlank { null } ?: user.email ?: "").take(120),
+                "userRole" to (resident?.roleLabel?.ifBlank { null } ?: "Warga").take(60),
+                "house" to (resident?.house?.ifBlank { null } ?: "-").take(40),
+                "actionType" to actionType.take(40),
+                "screen" to screen.take(60),
+                "detail" to detail.take(300),
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            db.collection("activity_logs").document(logId).set(payload).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Best-effort audit logging
+        }
+    }
+
+    fun observeActivityLogs(): Flow<List<ActivityLog>> = flow {
+        val activeUid = requireUserId()
+        val path = "activity_logs"
+        emitAll(
+            db.collection("activity_logs")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(100)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        ActivityLog::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    )
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val ex = firestoreError ?: (error as? Exception)
+                    if (ex != null && auth.currentUser?.uid == activeUid) {
+                        handleFirestoreError(ex, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    // --- KEUANGAN BLOK & RENCANA ANGGARAN (READ-ALL, WRITE ADMIN UTAMA ONLY) ---
+
+    fun observeFinanceEntries(): Flow<List<FinanceEntry>> = flow {
+        val activeUid = requireUserId()
+        val path = "finance_entries"
+        emitAll(
+            db.collection("finance_entries")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        FinanceEntry::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ).sortedByDescending { it.createdAt?.seconds ?: 0L }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val ex = firestoreError ?: (error as? Exception)
+                    if (ex != null && auth.currentUser?.uid == activeUid) {
+                        handleFirestoreError(ex, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun saveFinanceEntry(
+        existingId: String?,
+        kind: String,
+        title: String,
+        category: String,
+        amount: Long,
+        month: String,
+        note: String,
+        actorName: String
+    ): Result<Unit> {
+        val uid = try {
+            requireUserId()
+        } catch (e: Exception) {
+            return Result.failure(e)
+        }
+        if (!isBootstrappedAdmin(auth.currentUser)) {
+            return Result.failure(
+                IllegalStateException("Hanya Admin Utama yang dapat mencatat atau mengubah data Keuangan & Kas Blok.")
+            )
+        }
+        val cleanTitle = title.trim().take(120)
+        val cleanCat = category.trim().take(60).ifBlank { "Umum" }
+        val cleanNote = note.trim().take(300)
+        if (cleanTitle.isBlank() || amount <= 0L) {
+            return Result.failure(IllegalArgumentException("Judul transaksi dan nominal > Rp 0 wajib diisi."))
+        }
+        val validKind = kind.takeIf { it in listOf("masuk", "keluar", "kas_blok") } ?: "masuk"
+        val docId = existingId?.takeIf { it.isNotBlank() } ?: "fin_${System.currentTimeMillis()}"
+        val path = "finance_entries/$docId"
+        return try {
+            val docRef = db.collection("finance_entries").document(docId)
+            val dateLabel = formattedToday()
+            if (existingId != null && docRef.get().await().exists()) {
+                docRef.update(
+                    mapOf(
+                        "kind" to validKind,
+                        "title" to cleanTitle,
+                        "category" to cleanCat,
+                        "amount" to amount.coerceAtMost(1_000_000_000L),
+                        "month" to month,
+                        "dateLabel" to dateLabel,
+                        "note" to cleanNote,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            } else {
+                docRef.set(
+                    mapOf(
+                        "kind" to validKind,
+                        "title" to cleanTitle,
+                        "category" to cleanCat,
+                        "amount" to amount.coerceAtMost(1_000_000_000L),
+                        "month" to month,
+                        "dateLabel" to dateLabel,
+                        "note" to cleanNote,
+                        "createdByUid" to uid,
+                        "createdByName" to actorName.take(120).ifBlank { "Admin Utama" },
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteFinanceEntry(entryId: String): Result<Unit> {
+        val path = "finance_entries/$entryId"
+        return try {
+            requireUserId()
+            if (!isBootstrappedAdmin(auth.currentUser)) {
+                return Result.failure(IllegalStateException("Hanya Admin Utama yang dapat menghapus catatan keuangan."))
+            }
+            db.collection("finance_entries").document(entryId).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, path)
+            Result.failure(e)
+        }
+    }
+
+    fun observeBudgetPlans(): Flow<List<BudgetPlan>> = flow {
+        val activeUid = requireUserId()
+        val path = "budget_plans"
+        emitAll(
+            db.collection("budget_plans")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        BudgetPlan::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ).sortedByDescending { it.month }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val ex = firestoreError ?: (error as? Exception)
+                    if (ex != null && auth.currentUser?.uid == activeUid) {
+                        handleFirestoreError(ex, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun saveBudgetPlan(
+        existingId: String?,
+        title: String,
+        category: String,
+        month: String,
+        plannedAmount: Long,
+        realizedAmount: Long,
+        status: String,
+        note: String,
+        actorName: String
+    ): Result<Unit> {
+        val uid = try {
+            requireUserId()
+        } catch (e: Exception) {
+            return Result.failure(e)
+        }
+        if (!isBootstrappedAdmin(auth.currentUser)) {
+            return Result.failure(
+                IllegalStateException("Hanya Admin Utama yang dapat mengelola Rencana Anggaran Blok.")
+            )
+        }
+        val cleanTitle = title.trim().take(120)
+        val cleanCat = category.trim().take(60).ifBlank { "Infrastruktur" }
+        val cleanNote = note.trim().take(300)
+        if (cleanTitle.isBlank() || plannedAmount <= 0L) {
+            return Result.failure(IllegalArgumentException("Nama program dan target anggaran > Rp 0 wajib diisi."))
+        }
+        val validStatus = status.takeIf { it in listOf("planned", "in_progress", "completed") } ?: "planned"
+        val docId = existingId?.takeIf { it.isNotBlank() } ?: "plan_${System.currentTimeMillis()}"
+        val path = "budget_plans/$docId"
+        return try {
+            val docRef = db.collection("budget_plans").document(docId)
+            val safePlanned = plannedAmount.coerceIn(1L, 1_000_000_000L)
+            val safeRealized = realizedAmount.coerceIn(0L, 1_000_000_000L)
+            val safeActor = actorName.take(120).ifBlank { "Admin Utama" }
+            if (existingId != null && docRef.get().await().exists()) {
+                docRef.update(
+                    mapOf(
+                        "title" to cleanTitle,
+                        "category" to cleanCat,
+                        "month" to month,
+                        "plannedAmount" to safePlanned,
+                        "realizedAmount" to safeRealized,
+                        "status" to validStatus,
+                        "note" to cleanNote,
+                        "updatedByName" to safeActor,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            } else {
+                docRef.set(
+                    mapOf(
+                        "title" to cleanTitle,
+                        "category" to cleanCat,
+                        "month" to month,
+                        "plannedAmount" to safePlanned,
+                        "realizedAmount" to safeRealized,
+                        "status" to validStatus,
+                        "note" to cleanNote,
+                        "createdByUid" to uid,
+                        "updatedByName" to safeActor,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteBudgetPlan(planId: String): Result<Unit> {
+        val path = "budget_plans/$planId"
+        return try {
+            requireUserId()
+            if (!isBootstrappedAdmin(auth.currentUser)) {
+                return Result.failure(IllegalStateException("Hanya Admin Utama yang dapat menghapus rencana anggaran."))
+            }
+            db.collection("budget_plans").document(planId).delete().await()
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e

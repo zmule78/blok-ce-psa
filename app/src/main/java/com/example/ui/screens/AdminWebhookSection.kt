@@ -60,25 +60,10 @@ import com.example.data.model.DanaWebhookEvent
 import com.example.data.model.Payment
 import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
-import com.example.ui.theme.Amber100
-import com.example.ui.theme.Amber50
-import com.example.ui.theme.Amber600
 import com.example.ui.theme.DanaBlue
-import com.example.ui.theme.DanaDark
-import com.example.ui.theme.DanaLight
-import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
-import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
-import com.example.ui.theme.Rose50
-import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
+import com.example.ui.theme.adaptiveFieldColors
 import com.example.ui.viewmodel.MainUiState
 
 @Composable
@@ -96,6 +81,7 @@ fun DanaWebhookCard(
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val ac = adaptiveColors
     val cfg = state.danaWebhookConfig
 
     var webhookUrl by remember { mutableStateOf(cfg.webhookUrl) }
@@ -118,8 +104,8 @@ fun DanaWebhookCard(
 
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, DanaBlue.copy(alpha = 0.28f)),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.danaBorder),
         modifier = Modifier.testTag("dana_webhook_card")
     ) {
         Column(
@@ -137,7 +123,7 @@ fun DanaWebhookCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Surface(
-                        color = DanaLight,
+                        color = ac.danaSurface,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.size(38.dp)
                     ) {
@@ -148,7 +134,7 @@ fun DanaWebhookCard(
                             Icon(
                                 imageVector = Icons.Filled.Webhook,
                                 contentDescription = null,
-                                tint = DanaDark,
+                                tint = ac.danaText,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -157,24 +143,24 @@ fun DanaWebhookCard(
                         Text(
                             text = "Webhook DANA Real-Time",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Slate900,
+                            color = ac.textPrimary,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
                             text = "Node.js HMAC-SHA256 / Google Apps Script -> Firestore Live",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                     }
                 }
                 Surface(
-                    color = Emerald50,
+                    color = ac.emeraldSurface,
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = "LIVE",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Emerald700,
+                        color = ac.emeraldText,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -187,9 +173,10 @@ fun DanaWebhookCard(
                 label = { Text("URL Endpoint Webhook (/webhook/dana)") },
                 placeholder = { Text("https://blokce-webhook.example.run.app/webhook/dana") },
                 leadingIcon = {
-                    Icon(Icons.Filled.Http, contentDescription = null, tint = DanaDark)
+                    Icon(Icons.Filled.Http, contentDescription = null, tint = ac.danaText)
                 },
                 singleLine = true,
+                colors = adaptiveFieldColors(),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,13 +194,14 @@ fun DanaWebhookCard(
                     label = { Text("Secret HMAC-SHA256") },
                     placeholder = { Text("Opsional / generate otomatis") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("webhook_secret_input")
                 )
                 Surface(
-                    color = DanaLight,
+                    color = ac.danaSurface,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     IconButton(
@@ -228,12 +216,12 @@ fun DanaWebhookCard(
                         Icon(
                             imageVector = Icons.Filled.Autorenew,
                             contentDescription = "Generate secret webhook",
-                            tint = DanaDark
+                            tint = ac.danaText
                         )
                     }
                 }
                 Surface(
-                    color = Slate100,
+                    color = ac.subtleContainer,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     IconButton(
@@ -252,16 +240,16 @@ fun DanaWebhookCard(
                         Icon(
                             imageVector = Icons.Filled.ContentCopy,
                             contentDescription = "Salin secret webhook",
-                            tint = Slate600
+                            tint = ac.textSecondary
                         )
                     }
                 }
             }
 
             Surface(
-                color = Slate50,
+                color = ac.cardElevated,
                 shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Slate200)
+                border = BorderStroke(1.dp, ac.borderSubtle)
             ) {
                 Column {
                     Row(
@@ -275,13 +263,13 @@ fun DanaWebhookCard(
                             Text(
                                 text = "Auto-Verifikasi Event Webhook Masuk",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "Proses otomatis event berstatus RECEIVED dari Apps Script / server",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Slate500
+                                color = ac.textMuted
                             )
                         }
                         Switch(
@@ -303,13 +291,13 @@ fun DanaWebhookCard(
                             Text(
                                 text = "Teruskan Notif DANA Android ke Webhook",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "Kirim payload signed ke URL server saat notif DANA masuk di HP",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Slate500
+                                color = ac.textMuted
                             )
                         }
                         Switch(
@@ -331,7 +319,7 @@ fun DanaWebhookCard(
                         onSaveWebhookConfig(webhookUrl, webhookSecret, relayEnabled, autoVerifyEvents)
                     },
                     enabled = !state.isMutating,
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -352,9 +340,9 @@ fun DanaWebhookCard(
                         .heightIn(min = 48.dp)
                         .testTag("test_webhook_ping_button")
                 ) {
-                    Icon(Icons.Filled.Send, null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Send, null, modifier = Modifier.size(16.dp), tint = ac.danaText)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Test Ping", fontWeight = FontWeight.Bold)
+                    Text("Test Ping", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                 }
             }
 
@@ -370,9 +358,9 @@ fun DanaWebhookCard(
                     .heightIn(min = 48.dp)
                     .testTag("copy_webhook_curl_button")
             ) {
-                Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Salin Contoh cURL Webhook (HMAC-SHA256)", fontWeight = FontWeight.Bold)
+                Text("Salin Contoh cURL Webhook (HMAC-SHA256)", fontWeight = FontWeight.Bold, color = ac.textPrimary)
             }
 
             Row(
@@ -383,41 +371,41 @@ fun DanaWebhookCard(
                 Text(
                     text = "Stream Event Webhook (${state.danaWebhookEvents.size})",
                     style = MaterialTheme.typography.labelLarge,
-                    color = Slate900
+                    color = ac.textPrimary
                 )
                 Text(
                     text = "Firestore Live",
                     style = MaterialTheme.typography.labelSmall,
-                    color = DanaDark,
+                    color = ac.danaText,
                     fontWeight = FontWeight.Bold
                 )
             }
 
             if (state.danaWebhookEvents.isEmpty()) {
                 Surface(
-                    color = Slate50,
+                    color = ac.cardElevated,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = "Belum ada transaksi DANA masuk via webhook. Jalankan skrip Node.js / Google Apps Script untuk menerima event secara real-time.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500,
+                        color = ac.textMuted,
                         modifier = Modifier.padding(12.dp)
                     )
                 }
             } else {
                 state.danaWebhookEvents.take(6).forEach { ev ->
                     val statusColors = when (ev.status) {
-                        "AUTO_VERIFIED" -> Triple(Emerald50, Emerald700, "LUNAS OTOMATIS")
-                        "NEED_REVIEW" -> Triple(Amber50, Amber600, "PILIH MANUAL")
-                        "RECEIVED" -> Triple(DanaLight, DanaDark, "PROSES...")
-                        else -> Triple(Slate100, Slate600, "BELUM COCOK")
+                        "AUTO_VERIFIED" -> Triple(ac.emeraldSurface, ac.emeraldText, "LUNAS OTOMATIS")
+                        "NEED_REVIEW" -> Triple(ac.amberSurface, ac.amberText, "PILIH MANUAL")
+                        "RECEIVED" -> Triple(ac.danaSurface, ac.danaText, "PROSES...")
+                        else -> Triple(ac.subtleContainer, ac.textSecondary, "BELUM COCOK")
                     }
                     Surface(
-                        color = statusColors.first.copy(alpha = 0.55f),
+                        color = statusColors.first.copy(alpha = 0.72f),
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, statusColors.second.copy(alpha = 0.25f)),
+                        border = BorderStroke(1.dp, statusColors.second.copy(alpha = 0.28f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -432,7 +420,7 @@ fun DanaWebhookCard(
                                 Text(
                                     text = formatRupiah(ev.amount),
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = Slate900,
+                                    color = ac.textPrimary,
                                     fontWeight = FontWeight.Black
                                 )
                                 Row(
@@ -460,7 +448,7 @@ fun DanaWebhookCard(
                                         Icon(
                                             imageVector = Icons.Filled.Delete,
                                             contentDescription = "Hapus log webhook",
-                                            tint = Slate400,
+                                            tint = ac.textMuted,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -475,7 +463,7 @@ fun DanaWebhookCard(
                             Text(
                                 text = metaLine,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Slate600,
+                                color = ac.textSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -484,7 +472,7 @@ fun DanaWebhookCard(
                                 Text(
                                     text = ev.matchedSummary,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate900
+                                    color = ac.textPrimary
                                 )
                             }
 
@@ -497,7 +485,7 @@ fun DanaWebhookCard(
                                         .heightIn(min = 48.dp)
                                         .testTag("match_webhook_event_${ev.id}")
                                 ) {
-                                    Text("Cocokkan Tagihan Manual", fontWeight = FontWeight.Bold)
+                                    Text("Cocokkan Tagihan Manual", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                                 }
                             }
                         }
@@ -532,6 +520,7 @@ private fun MatchWebhookEventDialog(
     onMatchPayment: (Payment) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     val residentById = remember(state.allResidents) { state.allResidents.associateBy { it.id } }
     val openPayments = remember(state.allPayments, event.amount) {
         state.allPayments
@@ -546,6 +535,9 @@ private fun MatchWebhookEventDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = ac.cardContainer,
+        titleContentColor = ac.textPrimary,
+        textContentColor = ac.textPrimary,
         title = { Text("Cocokkan Webhook ${formatRupiah(event.amount)}") },
         text = {
             Column(
@@ -559,7 +551,7 @@ private fun MatchWebhookEventDialog(
                     Text(
                         text = "Info pengirim: ${event.senderName.ifBlank { "-" }} (${event.houseHint.ifBlank { "-" }})",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DanaDark,
+                        color = ac.danaText,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -567,18 +559,18 @@ private fun MatchWebhookEventDialog(
                     Text(
                         text = "Tidak ada tagihan terbuka (unpaid/pending) yang tersedia.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textMuted
                     )
                 } else {
                     openPayments.forEach { pay ->
                         val owner = residentById[pay.userId]
                         val exact = pay.amount == event.amount
                         Surface(
-                            color = if (exact) Emerald50 else Slate50,
+                            color = if (exact) ac.emeraldSurface else ac.cardElevated,
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(
                                 1.dp,
-                                if (exact) Emerald600 else Slate200
+                                if (exact) ac.emeraldText else ac.borderSubtle
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -588,12 +580,12 @@ private fun MatchWebhookEventDialog(
                                 Text(
                                     text = "${owner?.name ?: pay.userId} (${owner?.house ?: "-"})",
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = Slate900
+                                    color = ac.textPrimary
                                 )
                                 Text(
                                     text = "${pay.type.uppercase()} • ${monthLabel(pay.month)} • ${formatRupiah(pay.amount)} • ${pay.status}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Slate600
+                                    color = ac.textSecondary
                                 )
                             }
                         }
@@ -604,7 +596,7 @@ private fun MatchWebhookEventDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Tutup")
+                Text("Tutup", color = ac.textSecondary)
             }
         }
     )

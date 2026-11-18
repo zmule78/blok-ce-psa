@@ -28,8 +28,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.WifiOff
@@ -74,39 +77,32 @@ import com.example.data.model.DuesStatus
 import com.example.data.model.SystemSettings
 import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
-import com.example.ui.theme.Amber100
-import com.example.ui.theme.Amber600
 import com.example.ui.theme.DanaBlue
-import com.example.ui.theme.DanaLight
-import com.example.ui.theme.Emerald100
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
-import com.example.ui.theme.Rose100
-import com.example.ui.theme.Rose50
 import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
 @Composable
 fun StatusBadge(status: DuesStatus, offlineQueued: Boolean = false, isAutoBill: Boolean = false) {
+    val ac = adaptiveColors
     val (bg, fg, icon, text) = when {
-        offlineQueued -> Quad(Amber100, Amber600, Icons.Filled.WifiOff, "Antrean Offline")
-        status == DuesStatus.PAID -> Quad(Emerald100, Emerald700, Icons.Filled.CheckCircle, "Lunas")
-        isAutoBill -> Quad(Amber100, Amber600, Icons.Filled.Schedule, "Tagihan Aktif")
-        status == DuesStatus.PENDING -> Quad(Amber100, Amber600, Icons.Filled.Schedule, "Verifikasi")
-        status == DuesStatus.NOT_APPLICABLE -> Quad(Slate100, Slate500, Icons.Filled.Remove, "Nonaktif")
-        else -> Quad(Rose100, Rose600, Icons.Filled.Error, "Belum Bayar")
+        offlineQueued -> Quad(ac.amberSurface, ac.amberText, Icons.Filled.WifiOff, "Antrean Offline")
+        status == DuesStatus.PAID -> Quad(ac.emeraldSurface, ac.emeraldText, Icons.Filled.CheckCircle, "Lunas")
+        isAutoBill -> Quad(ac.amberSurface, ac.amberText, Icons.Filled.Schedule, "Tagihan Aktif")
+        status == DuesStatus.PENDING -> Quad(ac.amberSurface, ac.amberText, Icons.Filled.Schedule, "Verifikasi")
+        status == DuesStatus.NOT_APPLICABLE -> Quad(ac.subtleContainer, ac.textMuted, Icons.Filled.Remove, "Nonaktif")
+        else -> Quad(ac.roseSurface, ac.roseText, Icons.Filled.Error, "Belum Bayar")
     }
     Surface(
         color = bg,
         shape = CircleShape,
-        border = BorderStroke(1.dp, fg.copy(alpha = 0.2f))
+        border = BorderStroke(1.dp, fg.copy(alpha = 0.28f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -151,6 +147,7 @@ fun QrisGraphic(
         if (customQrisData.startsWith("data:image")) decodeDataUriBitmap(customQrisData) else null
     }
 
+    // QR quiet zone stays pure white so external camera scanners always read reliably
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
@@ -204,7 +201,6 @@ fun QrisGraphic(
                             }
                         }
                     }
-                    // DANA center badge
                     val badgeW = size.width * 0.30f
                     val badgeH = size.height * 0.18f
                     drawRoundRect(
@@ -229,7 +225,6 @@ fun QrisGraphic(
             }
         }
 
-        // Animated scan line
         Canvas(modifier = Modifier.fillMaxSize()) {
             val y = size.height * scanProgress
             drawLine(
@@ -251,10 +246,12 @@ fun QrisZoomDialog(
     onScanQris: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
             Column(
@@ -269,7 +266,7 @@ fun QrisZoomDialog(
                     Text(
                         text = "QRIS DANA RESMI",
                         style = MaterialTheme.typography.labelLarge,
-                        color = DanaBlue,
+                        color = ac.danaText,
                         fontWeight = FontWeight.ExtraBold
                     )
                     IconButton(
@@ -279,7 +276,7 @@ fun QrisZoomDialog(
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = "Tutup dialog QRIS",
-                            tint = Slate500
+                            tint = ac.textMuted
                         )
                     }
                 }
@@ -288,7 +285,7 @@ fun QrisZoomDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
-                        .background(DanaLight)
+                        .background(ac.danaSurface)
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -301,19 +298,19 @@ fun QrisZoomDialog(
                 Text(
                     text = settings.danaAccountName,
                     style = MaterialTheme.typography.titleMedium,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     textAlign = TextAlign.Center
                 )
                 Text(
                     text = "DANA: ${settings.danaNumber}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = DanaBlue,
+                    color = ac.danaText,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
                     onClick = onCopyDana,
-                    colors = ButtonDefaults.buttonColors(containerColor = DanaBlue),
+                    colors = ButtonDefaults.buttonColors(containerColor = DanaBlue, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -332,6 +329,7 @@ fun QrisZoomDialog(
                 OutlinedButton(
                     onClick = onScanQris,
                     shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, ac.emeraldBorder),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
@@ -340,11 +338,143 @@ fun QrisZoomDialog(
                     Icon(
                         imageVector = Icons.Filled.QrCodeScanner,
                         contentDescription = null,
-                        tint = Emerald700,
+                        tint = ac.emeraldText,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Scan QRIS dengan Kamera", color = Emerald700, fontWeight = FontWeight.Bold)
+                    Text("Scan QRIS dengan Kamera", color = ac.emeraldText, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReceiptPreviewDialog(
+    receiptImageUrl: String,
+    receiptOcrText: String,
+    payerLabel: String = "",
+    onDismiss: () -> Unit
+) {
+    val ac = adaptiveColors
+    val decoded = remember(receiptImageUrl) {
+        if (receiptImageUrl.startsWith("data:image")) decodeDataUriBitmap(receiptImageUrl) else null
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ReceiptLong,
+                            contentDescription = null,
+                            tint = ac.emeraldText
+                        )
+                        Column {
+                            Text(
+                                text = "Bukti Struk Pembayaran",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = ac.textPrimary,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            if (payerLabel.isNotBlank()) {
+                                Text(
+                                    text = payerLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ac.textSecondary
+                                )
+                            }
+                        }
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.testTag("close_receipt_preview_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Tutup pratinjau struk",
+                            tint = ac.textMuted
+                        )
+                    }
+                }
+
+                if (decoded != null) {
+                    Image(
+                        bitmap = decoded.asImageBitmap(),
+                        contentDescription = "Foto bukti struk",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(ac.subtleContainer)
+                    )
+                } else if (receiptImageUrl.startsWith("http")) {
+                    AsyncImage(
+                        model = receiptImageUrl,
+                        contentDescription = "Foto bukti struk",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                    )
+                }
+
+                if (receiptOcrText.isNotBlank()) {
+                    Surface(
+                        color = ac.cardElevated,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, ac.borderSubtle),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "HASIL EKSTRAKSI OCR",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ac.emeraldText,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = receiptOcrText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ac.textPrimary
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                ) {
+                    Text("Tutup", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -360,10 +490,12 @@ fun ReminderBlastDialog(
     onPayNow: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
             Column(
@@ -386,14 +518,14 @@ fun ReminderBlastDialog(
                 }
                 Spacer(modifier = Modifier.height(14.dp))
                 Surface(
-                    color = Rose50,
+                    color = ac.roseSurface,
                     shape = CircleShape,
-                    border = BorderStroke(1.dp, Rose100)
+                    border = BorderStroke(1.dp, ac.roseBorder)
                 ) {
                     Text(
                         text = "NOTIFIKASI • ${monthLabel(selectedMonth).uppercase()}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Rose600,
+                        color = ac.roseText,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
@@ -401,21 +533,21 @@ fun ReminderBlastDialog(
                 Text(
                     text = settings.reminderTitle.ifBlank { "Himbauan Pembayaran Iuran" },
                     style = MaterialTheme.typography.titleLarge,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = settings.reminderMessage,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Slate600,
+                    color = ac.textSecondary,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 Surface(
-                    color = Rose50,
+                    color = ac.roseSurface,
                     shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Rose100),
+                    border = BorderStroke(1.dp, ac.roseBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -425,17 +557,17 @@ fun ReminderBlastDialog(
                         Text(
                             text = "Total Tagihan ($house)",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate600
+                            color = ac.textSecondary
                         )
                         Text(
                             text = formatRupiah(totalDue),
                             style = MaterialTheme.typography.headlineMedium,
-                            color = Rose600
+                            color = ac.roseText
                         )
                         Text(
                             text = "DANA: ${settings.danaNumber}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textMuted
                         )
                     }
                 }
@@ -452,11 +584,11 @@ fun ReminderBlastDialog(
                             .heightIn(min = 48.dp)
                             .testTag("reminder_later_button")
                     ) {
-                        Text("Nanti Saja")
+                        Text("Nanti Saja", color = ac.textSecondary)
                     }
                     Button(
                         onClick = onPayNow,
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald600),
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald600, contentColor = Color.White),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .weight(1f)

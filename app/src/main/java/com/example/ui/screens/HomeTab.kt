@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
@@ -53,7 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.DuesStatus
+import com.example.data.model.computeFinanceSummary
 import com.example.data.model.computeMonthSummary
+import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
 import com.example.security.BiometricAvailability
 import com.example.security.BiometricSecurityState
@@ -62,21 +65,12 @@ import com.example.ui.components.StaggeredEntrance
 import com.example.ui.components.StatusBadge
 import com.example.ui.components.pressScale
 import com.example.ui.theme.Amber600
-import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
-import com.example.ui.theme.Purple100
-import com.example.ui.theme.Purple700
 import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
 import com.example.ui.viewmodel.MainTab
 import com.example.ui.viewmodel.MainUiState
 
@@ -90,7 +84,11 @@ fun HomeTab(
     onOpenQrisScanner: () -> Unit
 ) {
     val resident = state.currentResident ?: return
+    val ac = adaptiveColors
     val summary = computeMonthSummary(resident, state.userPayments, state.selectedMonth)
+    val financeSummary = remember(state.selectedMonth, state.financeEntries, state.allPayments, state.budgetPlans) {
+        computeFinanceSummary(state.selectedMonth, state.financeEntries, state.allPayments, state.budgetPlans)
+    }
 
     val (paidCount, totalMembers) = if (resident.adminRole) {
         val members = state.allResidents.filter { !it.adminRole }
@@ -170,8 +168,8 @@ fun HomeTab(
             StaggeredEntrance(delayMillis = 20) {
                 Card(
                     shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Emerald50),
-                    border = BorderStroke(1.dp, Emerald100),
+                    colors = CardDefaults.cardColors(containerColor = ac.emeraldSurface),
+                    border = BorderStroke(1.dp, ac.emeraldBorder),
                     modifier = Modifier.testTag("home_biometric_promo_card")
                 ) {
                     Row(
@@ -199,13 +197,13 @@ fun HomeTab(
                             Text(
                                 text = "Lindungi Portal dengan Biometrik",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "Aktifkan Sidik Jari / Wajah untuk akses lebih aman.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate600
+                                color = ac.textSecondary
                             )
                         }
                         TextButton(
@@ -214,11 +212,11 @@ fun HomeTab(
                                 .heightIn(min = 48.dp)
                                 .testTag("home_dismiss_biometric_button")
                         ) {
-                            Text("Nanti", color = Slate500)
+                            Text("Nanti", color = ac.textMuted)
                         }
                         Button(
                             onClick = onEnableBiometricClick,
-                            colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                            colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .heightIn(min = 48.dp)
@@ -235,122 +233,347 @@ fun HomeTab(
         StaggeredEntrance(delayMillis = 40) {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200),
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.sweepGradient(
-                                        listOf(Emerald500, Color(0xFF0EA5E9), Emerald600, Emerald500)
-                                    )
-                                )
-                                .padding(3.dp),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(42.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(Emerald700),
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(Emerald500, Color(0xFF0EA5E9), Emerald600, Emerald500)
+                                        )
+                                    )
+                                    .padding(3.dp),
                                 contentAlignment = Alignment.Center
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Emerald700),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = resident.name.firstOrNull()?.uppercase() ?: "W",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                            Column {
                                 Text(
-                                    text = resident.name.firstOrNull()?.uppercase() ?: "W",
+                                    text = "Assalamualaikum,",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ac.textMuted,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = resident.name,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Black
+                                    color = ac.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = resident.house,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = ac.textSecondary
                                 )
                             }
                         }
-                        Column {
+
+                        Surface(
+                            color = if (resident.adminRole) ac.purpleSurface else ac.emeraldSurface,
+                            shape = CircleShape
+                        ) {
                             Text(
-                                text = "Assalamualaikum,",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate400,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = resident.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Slate900,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = resident.house,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Slate500
+                                text = resident.roleLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (resident.adminRole) ac.purpleText else ac.emeraldText,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
                         }
                     }
 
-                    Surface(
-                        color = if (resident.adminRole) Purple100 else Emerald100,
-                        shape = CircleShape
+                    // Iuran & Hidmat Status Cards
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            text = resident.roleLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (resident.adminRole) Purple700 else Emerald700,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        DuesInfoMiniCard(
+                            title = "IURAN",
+                            amount = state.settings.iuranAmount,
+                            status = summary.iuranStatus,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DuesInfoMiniCard(
+                            title = "HIDMAT",
+                            amount = state.settings.hidmatAmount,
+                            status = summary.hidmatStatus,
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                }
 
-                // Iuran & Hidmat Status Cards
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    DuesInfoMiniCard(
-                        title = "IURAN",
-                        amount = state.settings.iuranAmount,
-                        status = summary.iuranStatus,
-                        modifier = Modifier.weight(1f)
-                    )
-                    DuesInfoMiniCard(
-                        title = "HIDMAT",
-                        amount = state.settings.hidmatAmount,
-                        status = summary.hidmatStatus,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Community Progress Bar
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Slate900)
-                        .drawBehind {
-                            drawCircle(
-                                color = Emerald500.copy(alpha = 0.16f),
-                                radius = size.maxDimension * 0.45f,
-                                center = Offset(size.width * 0.92f, size.height * 0.15f)
+                    // Community Progress Bar (explicitly dark slate container with crisp white text)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Slate900)
+                            .drawBehind {
+                                drawCircle(
+                                    color = Emerald500.copy(alpha = 0.16f),
+                                    radius = size.maxDimension * 0.45f,
+                                    center = Offset(size.width * 0.92f, size.height * 0.15f)
+                                )
+                            }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "PROGRES IURAN WARGA",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.78f)
+                                )
+                                Text(
+                                    text = if (totalMembers > 0) "$paidCount/$totalMembers" else "—",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                color = Emerald500,
+                                trackColor = Color.White.copy(alpha = 0.16f),
+                                strokeCap = StrokeCap.Round,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(CircleShape)
+                            )
+                            Text(
+                                text = if (totalMembers > 0) {
+                                    "$pct% warga lunas ${monthLabel(state.selectedMonth)}"
+                                } else {
+                                    "Menunggu pembaruan progres ${monthLabel(state.selectedMonth)}"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.65f)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // Billing Status Banner
+        StaggeredEntrance(delayMillis = 100) {
+            if (summary.overall != DuesStatus.PAID) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Rose600),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.NotificationsActive,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (summary.overall == DuesStatus.PENDING) {
+                                    "Menunggu Verifikasi"
+                                } else {
+                                    "Tagihan Belum Lunas"
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = monthLabel(state.selectedMonth),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                        Surface(
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            IconButton(
+                                onClick = onOpenQrisScanner,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("home_scan_qris_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.QrCodeScanner,
+                                    contentDescription = "Scan QRIS pembayaran",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = { onNavigateTab(MainTab.PAY) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Rose600
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("home_pay_now_button")
+                        ) {
+                            Text("Bayar", fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                }
+            } else {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Emerald600),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Alhamdulillah, Lunas!",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "Tagihan ${monthLabel(state.selectedMonth)} sudah lunas.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.92f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Transparency Shortcut Card -> Keuangan Blok & RAB
+        StaggeredEntrance(delayMillis = 135) {
+            val financeInteraction = remember { MutableInteractionSource() }
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pressScale(financeInteraction)
+                    .clickable(
+                        interactionSource = financeInteraction,
+                        indication = null
+                    ) { onNavigateTab(MainTab.FINANCE) }
+                    .testTag("home_open_finance_button")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        color = ac.danaSurface,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = ac.danaText,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Transparansi Kas & Rencana Anggaran",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = ac.textPrimary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Saldo Kas Blok: ${formatRupiah(financeSummary.currentKasBalance)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ac.emeraldText,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Buka menu Keuangan",
+                        tint = ac.emeraldText,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Latest Announcement Preview
+        val latest = state.announcements.firstOrNull()
+        if (latest != null) {
+            val previewInteraction = remember { MutableInteractionSource() }
+            StaggeredEntrance(delayMillis = 170) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                    border = BorderStroke(1.dp, ac.borderSubtle),
+                    modifier = Modifier.pressScale(previewInteraction)
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -358,227 +581,63 @@ fun HomeTab(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "PROGRES IURAN WARGA",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.78f)
-                            )
-                            Text(
-                                text = if (totalMembers > 0) "$paidCount/$totalMembers" else "—",
+                                text = "Info Terbaru",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.ExtraBold
+                                color = ac.textPrimary
                             )
+                            TextButton(
+                                onClick = { onNavigateTab(MainTab.INFO) },
+                                modifier = Modifier
+                                    .heightIn(min = 48.dp)
+                                    .testTag("home_see_all_info_button")
+                            ) {
+                                Text(
+                                    text = "Lihat Semua",
+                                    color = ac.emeraldText,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = ac.emeraldText,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            color = Emerald500,
-                            trackColor = Color.White.copy(alpha = 0.16f),
-                            strokeCap = StrokeCap.Round,
+
+                        Surface(
+                            color = ac.cardElevated,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, ac.borderSubtle),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(CircleShape)
-                        )
-                        Text(
-                            text = if (totalMembers > 0) {
-                                "$pct% warga lunas ${monthLabel(state.selectedMonth)}"
-                            } else {
-                                "Menunggu pembaruan progres ${monthLabel(state.selectedMonth)}"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.65f)
-                        )
-                    }
-                }
-            }
-        }
-        }
-
-        // Billing Status Banner
-        StaggeredEntrance(delayMillis = 100) {
-        if (summary.overall != DuesStatus.PAID) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Rose600),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.NotificationsActive,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (summary.overall == DuesStatus.PENDING) {
-                                "Menunggu Verifikasi"
-                            } else {
-                                "Tagihan Belum Lunas"
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = monthLabel(state.selectedMonth),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.9f)
-                        )
-                    }
-                    Surface(
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        IconButton(
-                            onClick = onOpenQrisScanner,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("home_scan_qris_button")
+                                .clickable(
+                                    interactionSource = previewInteraction,
+                                    indication = null
+                                ) { onNavigateTab(MainTab.INFO) }
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.QrCodeScanner,
-                                contentDescription = "Scan QRIS pembayaran",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                    Button(
-                        onClick = { onNavigateTab(MainTab.PAY) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Rose600
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .testTag("home_pay_now_button")
-                    ) {
-                        Text("Bayar", fontWeight = FontWeight.ExtraBold)
-                    }
-                }
-            }
-        } else {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Emerald600),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Alhamdulillah, Lunas!",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "Tagihan ${monthLabel(state.selectedMonth)} sudah lunas.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.92f)
-                        )
-                    }
-                }
-            }
-        }
-        }
-
-        // Latest Announcement Preview
-        val latest = state.announcements.firstOrNull()
-        if (latest != null) {
-            val previewInteraction = remember { MutableInteractionSource() }
-            StaggeredEntrance(delayMillis = 160) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200),
-                modifier = Modifier.pressScale(previewInteraction)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Info Terbaru",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Slate900
-                        )
-                        TextButton(
-                            onClick = { onNavigateTab(MainTab.INFO) },
-                            modifier = Modifier
-                                .heightIn(min = 48.dp)
-                                .testTag("home_see_all_info_button")
-                        ) {
-                            Text(
-                                text = "Lihat Semua",
-                                color = Emerald700,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = Emerald700,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        color = Slate50,
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Slate200),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = previewInteraction,
-                                indication = null
-                            ) { onNavigateTab(MainTab.INFO) }
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = latest.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Slate900,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = latest.content,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate600,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = latest.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = ac.textPrimary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = latest.content,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ac.textSecondary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -591,10 +650,11 @@ private fun DuesInfoMiniCard(
     status: DuesStatus,
     modifier: Modifier = Modifier
 ) {
+    val ac = adaptiveColors
     Surface(
-        color = Slate50,
+        color = ac.cardElevated,
         shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, Slate200),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = modifier
     ) {
         Column(
@@ -604,12 +664,12 @@ private fun DuesInfoMiniCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,
-                color = Slate500
+                color = ac.textMuted
             )
             AnimatedRupiahText(
                 targetAmount = amount,
                 style = MaterialTheme.typography.titleSmall,
-                color = Slate900,
+                color = ac.textPrimary,
                 fontWeight = FontWeight.ExtraBold,
                 useMonospace = true
             )

@@ -130,6 +130,8 @@ data class AdminInvite(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+const val MAX_DELEGATED_ADMINS_BY_PENGURUS = 3
+
 @Keep
 @IgnoreExtraProperties
 data class Payment(
@@ -142,6 +144,8 @@ data class Payment(
     val dateLabel: String = "",
     val method: String = "Transfer DANA",
     val note: String = "",
+    val receiptImageUrl: String = "",
+    val receiptOcrText: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null,
     @get:Exclude val offlineQueued: Boolean = false
@@ -214,6 +218,81 @@ data class DanaWebhookEvent(
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
+
+@Keep
+@IgnoreExtraProperties
+data class UserPresence(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val name: String = "",
+    val house: String = "",
+    val email: String = "",
+    val role: String = "member",
+    val roleLabel: String = "Warga / Member",
+    val online: Boolean = true,
+    val activeScreen: String = "Beranda",
+    val lastSeenMillis: Long = 0L,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+    @Exclude
+    fun isEffectivelyOnline(nowMillis: Long = System.currentTimeMillis()): Boolean =
+        online && (nowMillis - lastSeenMillis) <= 150_000L
+}
+
+@Keep
+@IgnoreExtraProperties
+data class ActivityLog(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val userEmail: String = "",
+    val userRole: String = "",
+    val house: String = "",
+    val actionType: String = "NAVIGATE",
+    val screen: String = "Beranda",
+    val detail: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class FinanceEntry(
+    @DocumentId val id: String = "",
+    val kind: String = "masuk",
+    val title: String = "",
+    val category: String = "Umum",
+    val amount: Long = 0L,
+    val month: String = "2026-11",
+    val dateLabel: String = "",
+    val note: String = "",
+    val createdByUid: String = "",
+    val createdByName: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+@Keep
+@IgnoreExtraProperties
+data class BudgetPlan(
+    @DocumentId val id: String = "",
+    val title: String = "",
+    val category: String = "Infrastruktur",
+    val month: String = "2026-11",
+    val plannedAmount: Long = 0L,
+    val realizedAmount: Long = 0L,
+    val status: String = "planned",
+    val note: String = "",
+    val createdByUid: String = "",
+    val updatedByName: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+    @get:Exclude
+    val progressPercent: Int
+        get() = if (plannedAmount > 0L) {
+            ((realizedAmount.toDouble() / plannedAmount.toDouble()) * 100.0).toInt().coerceIn(0, 100)
+        } else 0
+}
 
 enum class DuesStatus {
     PAID,
@@ -549,3 +628,155 @@ fun computeAdminDashboardAnalytics(
         monthlyTrends = trends
     )
 }
+
+data class CurrentMonthStatusSummary(
+    val month: String,
+    val totalActiveResidents: Int,
+    val paidResidents: Int,
+    val pendingResidents: Int,
+    val unpaidResidents: Int
+)
+
+fun computeCurrentMonthStatusSummary(
+    month: String,
+    residents: List<Resident>,
+    payments: List<Payment>
+): CurrentMonthStatusSummary {
+    val activeMembers = residents.filter { !it.adminRole }
+    var paidCount = 0
+    var pendingCount = 0
+    var unpaidCount = 0
+    activeMembers.forEach { resident ->
+        val mine = payments.filter { it.userId == resident.id && it.month == month }
+        when (computeMonthSummary(resident, mine, month).overall) {
+            DuesStatus.PAID -> paidCount++
+            DuesStatus.PENDING -> pendingCount++
+            DuesStatus.UNPAID, DuesStatus.NOT_APPLICABLE -> unpaidCount++
+        }
+    }
+    return CurrentMonthStatusSummary(
+        month = month,
+        totalActiveResidents = activeMembers.size,
+        paidResidents = paidCount,
+        pendingResidents = pendingCount,
+        unpaidResidents = unpaidCount
+    )
+}
+
+data class FinanceSummary(
+    val selectedMonth: String,
+    val totalIuranPaidAllTime: Long,
+    val totalKasBlokInitial: Long,
+    val totalManualMasuk: Long,
+    val totalKeluar: Long,
+    val currentKasBalance: Long,
+    val monthMasukTotal: Long,
+    val monthKeluarTotal: Long,
+    val monthKasBlokTotal: Long,
+    val totalPlannedBudget: Long,
+    val totalRealizedBudget: Long
+)
+
+fun computeFinanceSummary(
+    selectedMonth: String,
+    entries: List<FinanceEntry>,
+    payments: List<Payment>,
+    budgetPlans: List<BudgetPlan>
+): FinanceSummary {
+    val paidDuesAllTime = payments.filter { it.status == "paid" }.sumOf { it.amount }
+    val paidDuesMonth = payments.filter { it.status == "paid" && it.month == selectedMonth }.sumOf { it.amount }
+
+    val kasBlokAll = entries.filter { it.kind == "kas_blok" }.sumOf { it.amount }
+    val manualMasukAll = entries.filter { it.kind == "masuk" }.sumOf { it.amount }
+    val keluarAll = entries.filter { it.kind == "keluar" }.sumOf { it.amount }
+
+    val balance = (kasBlokAll + manualMasukAll + paidDuesAllTime) - keluarAll
+
+    val monthEntries = entries.filter { it.month == selectedMonth }
+    val monthMasuk = monthEntries.filter { it.kind == "masuk" }.sumOf { it.amount } + paidDuesMonth
+    val monthKeluar = monthEntries.filter { it.kind == "keluar" }.sumOf { it.amount }
+    val monthKas = monthEntries.filter { it.kind == "kas_blok" }.sumOf { it.amount }
+
+    val plannedTotal = budgetPlans.sumOf { it.plannedAmount }
+    val realizedTotal = budgetPlans.sumOf { it.realizedAmount }
+
+    return FinanceSummary(
+        selectedMonth = selectedMonth,
+        totalIuranPaidAllTime = paidDuesAllTime,
+        totalKasBlokInitial = kasBlokAll,
+        totalManualMasuk = manualMasukAll,
+        totalKeluar = keluarAll,
+        currentKasBalance = balance,
+        monthMasukTotal = monthMasuk,
+        monthKeluarTotal = monthKeluar,
+        monthKasBlokTotal = monthKas,
+        totalPlannedBudget = plannedTotal,
+        totalRealizedBudget = realizedTotal
+    )
+}
+
+data class MonthlyKasPoint(
+    val monthCode: String,
+    val shortLabel: String,
+    val fullLabel: String,
+    val masukAmount: Long,
+    val keluarAmount: Long,
+    val kasInitialAmount: Long,
+    val netDelta: Long,
+    val runningBalance: Long
+)
+
+fun computeMonthlyKasTimeline(
+    selectedMonth: String,
+    entries: List<FinanceEntry>,
+    payments: List<Payment>,
+    monthWindowSize: Int = 6
+): List<MonthlyKasPoint> {
+    val (selYear, selMonthNum) = parsePeriodCode(selectedMonth)
+    val count = monthWindowSize.coerceIn(3, 12)
+    val rawOffsets = (-(count - 1)..0).map { offset ->
+        val totalIdx = (selYear * 12 + (selMonthNum - 1)) + offset
+        val y = totalIdx / 12
+        val m = (totalIdx % 12) + 1
+        y to m
+    }
+    val valid = rawOffsets.filter { (y, m) -> isWithinBillingHorizon(y, m) }
+    val finalPairs = if (valid.size >= 3) {
+        valid
+    } else {
+        (1..count).map { m -> MIN_BILLING_YEAR to m }
+    }
+    val periodCodes = finalPairs.map { (y, m) -> formatPeriodCode(y, m) }
+    val firstPeriod = periodCodes.first()
+
+    // Cumulative balance strictly before the displayed window
+    val priorEntriesMasuk = entries.filter { it.month < firstPeriod && it.kind == "masuk" }.sumOf { it.amount }
+    val priorEntriesKas = entries.filter { it.month < firstPeriod && it.kind == "kas_blok" }.sumOf { it.amount }
+    val priorEntriesKeluar = entries.filter { it.month < firstPeriod && it.kind == "keluar" }.sumOf { it.amount }
+    val priorPaidDues = payments.filter { it.month < firstPeriod && it.status == "paid" }.sumOf { it.amount }
+    var running = (priorEntriesKas + priorEntriesMasuk + priorPaidDues) - priorEntriesKeluar
+
+    return periodCodes.map { code ->
+        val (_, mNum) = parsePeriodCode(code)
+        val mEntries = entries.filter { it.month == code }
+        val kasInit = mEntries.filter { it.kind == "kas_blok" }.sumOf { it.amount }
+        val manualIn = mEntries.filter { it.kind == "masuk" }.sumOf { it.amount }
+        val duesIn = payments.filter { it.month == code && it.status == "paid" }.sumOf { it.amount }
+        val totalIn = manualIn + duesIn
+        val totalOut = mEntries.filter { it.kind == "keluar" }.sumOf { it.amount }
+        val net = (kasInit + totalIn) - totalOut
+        running += net
+        MonthlyKasPoint(
+            monthCode = code,
+            shortLabel = INDONESIAN_MONTHS_SHORT.getOrElse(mNum - 1) { "Jan" },
+            fullLabel = monthLabel(code),
+            masukAmount = totalIn,
+            keluarAmount = totalOut,
+            kasInitialAmount = kasInit,
+            netDelta = net,
+            runningBalance = running
+        )
+    }
+}
+
+

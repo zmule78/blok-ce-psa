@@ -60,24 +60,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.data.model.SystemSettings
+import com.example.data.repository.BlokCeRepository
 import com.example.security.BiometricAvailability
 import com.example.security.BiometricSecurityState
 import com.example.ui.components.uriToCompressedDataUri
-import com.example.data.repository.BlokCeRepository
-import com.example.ui.theme.Amber600
 import com.example.ui.theme.DanaBlue
-import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
+import com.example.ui.theme.adaptiveFieldColors
 import com.example.ui.viewmodel.MainUiState
 
 @Composable
@@ -100,6 +94,7 @@ fun AccountTab(
 ) {
     val resident = state.currentResident ?: return
     val context = LocalContext.current
+    val ac = adaptiveColors
 
     var username by remember(resident.id) { mutableStateOf(resident.username) }
     var name by remember(resident.id) { mutableStateOf(resident.name) }
@@ -117,8 +112,8 @@ fun AccountTab(
         // Profile Summary Header
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200)
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle)
         ) {
             Row(
                 modifier = Modifier
@@ -154,22 +149,35 @@ fun AccountTab(
                         )
                     }
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = resident.name,
                         style = MaterialTheme.typography.titleMedium,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     Text(
                         text = "@${resident.username} • ${resident.house}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textSecondary
                     )
                     Text(
                         text = resident.email,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate400
+                        color = ac.textMuted
                     )
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Surface(
+                        color = if (resident.primaryAdmin) ac.emeraldSurface else if (resident.adminRole) ac.purpleSurface else ac.subtleContainer,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = if (resident.primaryAdmin) "Admin Utama" else if (resident.adminRole) "Pengurus Blok" else "Warga",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (resident.primaryAdmin) ac.emeraldText else if (resident.adminRole) ac.purpleText else ac.textSecondary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
             }
         }
@@ -177,8 +185,8 @@ fun AccountTab(
         // Profile Form
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200)
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -187,13 +195,14 @@ fun AccountTab(
                 Text(
                     text = "Profil Saya",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Slate900
+                    color = ac.textPrimary
                 )
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -204,6 +213,7 @@ fun AccountTab(
                     onValueChange = { name = it },
                     label = { Text("Nama Lengkap") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -218,6 +228,7 @@ fun AccountTab(
                         onValueChange = { house = it },
                         label = { Text("No. Rumah") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -229,6 +240,7 @@ fun AccountTab(
                         label = { Text("No. HP") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -238,7 +250,7 @@ fun AccountTab(
                 Button(
                     onClick = { onSaveProfile(username, name, house, phone) },
                     enabled = !state.isMutating,
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -259,8 +271,8 @@ fun AccountTab(
             onOpenBiometricEnroll = onOpenBiometricEnroll
         )
 
-        // Admin System Settings Form
-        if (resident.adminRole) {
+        // Primary Admin ONLY: System Settings Form (Two-Tier Enforcement)
+        if (resident.primaryAdmin) {
             val s = state.settings
             var blokName by remember(s) { mutableStateOf(s.blokName) }
             var subtitle by remember(s) { mutableStateOf(s.subtitle) }
@@ -283,23 +295,25 @@ fun AccountTab(
 
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200)
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle),
+                modifier = Modifier.testTag("primary_admin_settings_card")
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "Pengaturan Blok (Admin)",
+                        text = "Pengaturan Blok (Admin Utama)",
                         style = MaterialTheme.typography.titleSmall,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     OutlinedTextField(
                         value = blokName,
                         onValueChange = { blokName = it },
                         label = { Text("Nama Blok") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -308,6 +322,7 @@ fun AccountTab(
                         onValueChange = { subtitle = it },
                         label = { Text("Subjudul") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -321,6 +336,7 @@ fun AccountTab(
                             label = { Text("Nomor DANA") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                             singleLine = true,
+                            colors = adaptiveFieldColors(),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.weight(1f)
                         )
@@ -329,6 +345,7 @@ fun AccountTab(
                             onValueChange = { danaOwner = it },
                             label = { Text("Atas Nama DANA") },
                             singleLine = true,
+                            colors = adaptiveFieldColors(),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.weight(1f)
                         )
@@ -343,6 +360,7 @@ fun AccountTab(
                             label = { Text("Tarif Iuran") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            colors = adaptiveFieldColors(),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.weight(1f)
                         )
@@ -352,6 +370,7 @@ fun AccountTab(
                             label = { Text("Tarif Hidmat") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            colors = adaptiveFieldColors(),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.weight(1f)
                         )
@@ -361,6 +380,7 @@ fun AccountTab(
                         onValueChange = { reminderTitle = it },
                         label = { Text("Judul Himbauan") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -369,6 +389,7 @@ fun AccountTab(
                         onValueChange = { reminderMsg = it },
                         label = { Text("Pesan Himbauan") },
                         minLines = 2,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -382,7 +403,7 @@ fun AccountTab(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = DanaBlue),
+                            colors = ButtonDefaults.buttonColors(containerColor = DanaBlue, contentColor = Color.White),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .weight(1f)
@@ -398,7 +419,7 @@ fun AccountTab(
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.heightIn(min = 48.dp)
                             ) {
-                                Text("Reset QRIS")
+                                Text("Reset QRIS", color = ac.textPrimary)
                             }
                         }
                     }
@@ -419,7 +440,7 @@ fun AccountTab(
                             )
                         },
                         enabled = !state.isMutating,
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -430,17 +451,15 @@ fun AccountTab(
                     }
                 }
             }
-        }
 
-        // Primary Admin: Manage Delegated Admin Accounts & Invite Codes
-        if (resident.primaryAdmin) {
+            // Primary Admin: Manage Delegated Admin Accounts & Invite Codes
             var inviteLabel by remember { mutableStateOf("Bendahara Blok CE") }
             var inviteEmail by remember { mutableStateOf("") }
 
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200)
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -453,18 +472,18 @@ fun AccountTab(
                         Icon(
                             imageVector = Icons.Filled.AdminPanelSettings,
                             contentDescription = null,
-                            tint = Emerald700
+                            tint = ac.emeraldText
                         )
                         Text(
                             text = "Kelola Akses Admin & Pengurus",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                     }
                     Surface(
-                        color = Emerald50,
+                        color = ac.emeraldSurface,
                         shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Emerald100),
+                        border = BorderStroke(1.dp, ac.emeraldBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -474,13 +493,13 @@ fun AccountTab(
                             Text(
                                 text = "ADMIN UTAMA",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Emerald700,
+                                color = ac.emeraldText,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = BlokCeRepository.BOOTSTRAPPED_ADMIN_EMAIL,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -491,6 +510,7 @@ fun AccountTab(
                         onValueChange = { inviteLabel = it },
                         label = { Text("Jabatan / Label Pengurus") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -501,6 +521,7 @@ fun AccountTab(
                         placeholder = { Text("Kosongkan agar bisa dipakai 1 akun mana saja") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -510,7 +531,10 @@ fun AccountTab(
                             inviteEmail = ""
                         },
                         enabled = !state.isMutating,
-                        colors = ButtonDefaults.buttonColors(containerColor = Slate900),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (ac.isDark) DanaBlue else Slate900,
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -523,17 +547,17 @@ fun AccountTab(
                     }
 
                     if (state.adminInvites.isNotEmpty()) {
-                        HorizontalDivider(color = Slate100)
+                        HorizontalDivider(color = ac.divider)
                         Text(
                             text = "Daftar Kode Undangan",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                         state.adminInvites.forEach { invite ->
                             Surface(
-                                color = Slate50,
+                                color = ac.cardElevated,
                                 shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.dp, Slate200),
+                                border = BorderStroke(1.dp, ac.borderSubtle),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -544,7 +568,7 @@ fun AccountTab(
                                         Text(
                                             text = invite.code,
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = Slate900,
+                                            color = ac.textPrimary,
                                             fontWeight = FontWeight.Black
                                         )
                                         Text(
@@ -554,7 +578,7 @@ fun AccountTab(
                                                 append(if (invite.used) " • Terpakai (${invite.usedByEmail})" else " • Siap Dipakai")
                                             },
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = if (invite.used) Slate400 else Emerald700
+                                            color = if (invite.used) ac.textMuted else ac.emeraldText
                                         )
                                     }
                                     if (!invite.used) {
@@ -567,7 +591,7 @@ fun AccountTab(
                                             Icon(
                                                 imageVector = Icons.Filled.ContentCopy,
                                                 contentDescription = "Salin kode ${invite.code}",
-                                                tint = Emerald700
+                                                tint = ac.emeraldText
                                             )
                                         }
                                     }
@@ -580,7 +604,7 @@ fun AccountTab(
                                         Icon(
                                             imageVector = Icons.Filled.Delete,
                                             contentDescription = "Hapus kode ${invite.code}",
-                                            tint = Rose600
+                                            tint = ac.roseText
                                         )
                                     }
                                 }
@@ -589,17 +613,17 @@ fun AccountTab(
                     }
 
                     if (state.delegatedAdmins.isNotEmpty()) {
-                        HorizontalDivider(color = Slate100)
+                        HorizontalDivider(color = ac.divider)
                         Text(
                             text = "Admin / Pengurus Aktif",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                         state.delegatedAdmins.forEach { admin ->
                             Surface(
-                                color = Slate50,
+                                color = ac.cardElevated,
                                 shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.dp, Slate200),
+                                border = BorderStroke(1.dp, ac.borderSubtle),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -610,12 +634,12 @@ fun AccountTab(
                                         Text(
                                             text = admin.email,
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = Slate900
+                                            color = ac.textPrimary
                                         )
                                         Text(
                                             text = admin.roleLabel,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = Slate500
+                                            color = ac.textSecondary
                                         )
                                     }
                                     if (admin.userId != resident.id) {
@@ -628,7 +652,7 @@ fun AccountTab(
                                             Icon(
                                                 imageVector = Icons.Filled.Delete,
                                                 contentDescription = "Cabut akses admin ${admin.email}",
-                                                tint = Rose600
+                                                tint = ac.roseText
                                             )
                                         }
                                     }
@@ -643,8 +667,8 @@ fun AccountTab(
             var redeemCode by remember { mutableStateOf("") }
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200)
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -657,18 +681,18 @@ fun AccountTab(
                         Icon(
                             imageVector = Icons.Filled.AdminPanelSettings,
                             contentDescription = null,
-                            tint = Slate900
+                            tint = ac.textPrimary
                         )
                         Text(
                             text = "Aktivasi Akses Admin / Pengurus",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                     }
                     Text(
                         text = "Punya kode undangan dari Admin Utama (${BlokCeRepository.BOOTSTRAPPED_ADMIN_EMAIL})? Masukkan di sini untuk mengaktifkan akses pengurus.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textSecondary
                     )
                     OutlinedTextField(
                         value = redeemCode,
@@ -676,6 +700,7 @@ fun AccountTab(
                         label = { Text("Kode Undangan Admin") },
                         placeholder = { Text("Contoh: CE-ADM-XXXX") },
                         singleLine = true,
+                        colors = adaptiveFieldColors(),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -687,7 +712,10 @@ fun AccountTab(
                             redeemCode = ""
                         },
                         enabled = redeemCode.trim().length >= 6 && !state.isMutating,
-                        colors = ButtonDefaults.buttonColors(containerColor = Slate900),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (ac.isDark) DanaBlue else Slate900,
+                            contentColor = Color.White
+                        ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -705,8 +733,8 @@ fun AccountTab(
         // Cloud & Offline SQLite Status Card + Sign Out
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200)
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -716,11 +744,11 @@ fun AccountTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Cloud Firestore", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Cloud Firestore", style = MaterialTheme.typography.bodySmall, color = ac.textSecondary)
                     Text(
                         text = if (state.isOnline) "● Terhubung" else "● Offline",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (state.isOnline) Emerald700 else Amber600,
+                        color = if (state.isOnline) ac.emeraldText else ac.amberText,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -728,11 +756,11 @@ fun AccountTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Cache SQLite (Room)", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Cache SQLite (Room)", style = MaterialTheme.typography.bodySmall, color = ac.textSecondary)
                     Text(
                         text = "● Aktif",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Emerald700,
+                        color = ac.emeraldText,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -740,11 +768,11 @@ fun AccountTab(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Antrean Offline", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Antrean Offline", style = MaterialTheme.typography.bodySmall, color = ac.textSecondary)
                     Text(
                         text = "${state.pendingOfflineCount} transaksi",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (state.pendingOfflineCount > 0) Amber600 else Slate900,
+                        color = if (state.pendingOfflineCount > 0) ac.amberText else ac.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -757,15 +785,15 @@ fun AccountTab(
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
                     ) {
-                        Icon(Icons.Filled.Sync, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Sync, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Sinkronkan Antrean Sekarang")
+                        Text("Sinkronkan Antrean Sekarang", color = ac.textPrimary)
                     }
                 }
 
                 Button(
                     onClick = onSignOut,
-                    colors = ButtonDefaults.buttonColors(containerColor = Rose600),
+                    colors = ButtonDefaults.buttonColors(containerColor = Rose600, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -793,18 +821,19 @@ private fun BiometricSecuritySettingsCard(
     onLockPortalNow: () -> Unit,
     onOpenBiometricEnroll: () -> Unit
 ) {
+    val ac = adaptiveColors
     val isAvailable = biometricState.availability == BiometricAvailability.AVAILABLE
     val (statusLabel, statusBg, statusFg) = when {
-        isAvailable && biometricState.portalLockEnabled -> Triple("Aktif", Emerald100, Emerald700)
-        isAvailable -> Triple("Siap Diaktifkan", Emerald50, Emerald700)
-        biometricState.availability == BiometricAvailability.NONE_ENROLLED -> Triple("Belum Terdaftar", Color(0xFFFEF3C7), Amber600)
-        else -> Triple("Tidak Didukung", Slate100, Slate500)
+        isAvailable && biometricState.portalLockEnabled -> Triple("Aktif", ac.emeraldSurface, ac.emeraldText)
+        isAvailable -> Triple("Siap Diaktifkan", ac.emeraldSurface, ac.emeraldText)
+        biometricState.availability == BiometricAvailability.NONE_ENROLLED -> Triple("Belum Terdaftar", ac.amberSurface, ac.amberText)
+        else -> Triple("Tidak Didukung", ac.subtleContainer, ac.textMuted)
     }
 
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Slate200),
+        colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+        border = BorderStroke(1.dp, ac.borderSubtle),
         modifier = Modifier.testTag("biometric_security_card")
     ) {
         Column(
@@ -822,7 +851,7 @@ private fun BiometricSecuritySettingsCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Surface(
-                        color = Emerald50,
+                        color = ac.emeraldSurface,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.size(38.dp)
                     ) {
@@ -830,7 +859,7 @@ private fun BiometricSecuritySettingsCard(
                             Icon(
                                 imageVector = Icons.Filled.Fingerprint,
                                 contentDescription = null,
-                                tint = Emerald700,
+                                tint = ac.emeraldText,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -839,12 +868,12 @@ private fun BiometricSecuritySettingsCard(
                         Text(
                             text = "Keamanan Biometrik",
                             style = MaterialTheme.typography.titleSmall,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                         Text(
                             text = "Sidik Jari / Pengenalan Wajah",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textSecondary
                         )
                     }
                 }
@@ -864,9 +893,9 @@ private fun BiometricSecuritySettingsCard(
 
             if (biometricState.availability == BiometricAvailability.NONE_ENROLLED) {
                 Surface(
-                    color = Slate50,
+                    color = ac.cardElevated,
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Slate200),
+                    border = BorderStroke(1.dp, ac.borderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -876,7 +905,7 @@ private fun BiometricSecuritySettingsCard(
                         Text(
                             text = "Perangkat mendukung sensor biometrik, namun belum ada sidik jari atau wajah yang didaftarkan di Setelan.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Slate500
+                            color = ac.textSecondary
                         )
                         OutlinedButton(
                             onClick = onOpenBiometricEnroll,
@@ -886,9 +915,9 @@ private fun BiometricSecuritySettingsCard(
                                 .heightIn(min = 48.dp)
                                 .testTag("enroll_biometric_button")
                         ) {
-                            Icon(Icons.Filled.Settings, null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.Settings, null, modifier = Modifier.size(16.dp), tint = ac.emeraldText)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Daftarkan Sidik Jari / Wajah", fontWeight = FontWeight.Bold)
+                            Text("Daftarkan Sidik Jari / Wajah", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                         }
                     }
                 }
@@ -902,11 +931,11 @@ private fun BiometricSecuritySettingsCard(
                         "Perangkat ini tidak memiliki sensor sidik jari atau wajah yang kompatibel."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = Slate500
+                    color = ac.textSecondary
                 )
             }
 
-            HorizontalDivider(color = Slate100)
+            HorizontalDivider(color = ac.divider)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -917,12 +946,12 @@ private fun BiometricSecuritySettingsCard(
                     Text(
                         text = "Kunci Portal Warga",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     Text(
                         text = "Minta sidik jari / wajah saat membuka aplikasi atau kembali dari latar belakang.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textSecondary
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
@@ -947,12 +976,12 @@ private fun BiometricSecuritySettingsCard(
                     Text(
                         text = "Verifikasi Saat Pembayaran",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     Text(
                         text = "Konfirmasi biometrik sebelum mengirim bukti pembayaran iuran.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500
+                        color = ac.textSecondary
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
@@ -972,7 +1001,7 @@ private fun BiometricSecuritySettingsCard(
                 OutlinedButton(
                     onClick = onLockPortalNow,
                     shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Emerald700.copy(alpha = 0.35f)),
+                    border = BorderStroke(1.dp, ac.emeraldBorder),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
@@ -981,13 +1010,13 @@ private fun BiometricSecuritySettingsCard(
                     Icon(
                         imageVector = Icons.Filled.Lock,
                         contentDescription = null,
-                        tint = Emerald700,
+                        tint = ac.emeraldText,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Kunci Portal Sekarang",
-                        color = Emerald700,
+                        color = ac.emeraldText,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -995,4 +1024,3 @@ private fun BiometricSecuritySettingsCard(
         }
     }
 }
-

@@ -85,6 +85,8 @@
         "dateLabel": { "type": "string", "description": "Formatted payment date label" },
         "method": { "type": "string", "description": "Payment method label" },
         "note": { "type": "string", "description": "Optional transfer note" },
+        "receiptImageUrl": { "type": "string", "description": "Optional scanned digital receipt compressed JPEG data URI" },
+        "receiptOcrText": { "type": "string", "description": "Optional ML Kit OCR extracted text summary from receipt" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
       },
@@ -124,14 +126,14 @@
     },
     "AdminWebhookConfig": {
       "title": "AdminWebhookConfig",
-      "description": "Admin-only webhook endpoint URL, HMAC secret, and relay settings.",
+      "description": "Primary-admin-only webhook endpoint URL, HMAC secret, and relay settings.",
       "type": "object",
       "properties": {
         "webhookUrl": { "type": "string", "description": "HTTPS endpoint URL receiving signed DANA webhook payloads" },
         "webhookSecret": { "type": "string", "description": "HMAC-SHA256 signing secret shared with webhook server" },
         "relayFromAndroidEnabled": { "type": "boolean", "description": "Whether incoming Android DANA notifications are relayed to webhookUrl" },
         "autoVerifyWebhookEvents": { "type": "boolean", "description": "Whether RECEIVED webhook events auto-verify matching payments" },
-        "updatedByUid": { "type": "string", "description": "Admin UID who updated webhook settings" },
+        "updatedByUid": { "type": "string", "description": "Primary admin UID who updated webhook settings" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" },
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
       },
@@ -159,12 +161,99 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
       },
       "required": ["referenceId", "source", "amount", "senderName", "senderPhone", "houseHint", "monthHint", "paymentTypeHint", "rawPayload", "status", "matchedPaymentId", "matchedSummary", "verifiedByUid", "createdAt", "updatedAt"]
+    },
+    "DelegatedAdminCounter": {
+      "title": "DelegatedAdminCounter",
+      "description": "Atomic delegated Pengurus Blok count tracker used to enforce the 3-slot cap in rules.",
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer", "description": "Current number of delegated Pengurus Blok accounts" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["count", "updatedAt"]
+    },
+    "UserPresence": {
+      "title": "UserPresence",
+      "description": "Live online presence heartbeat per user account, readable by Primary Admin.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Resident display name" },
+        "house": { "type": "string", "description": "Resident house unit" },
+        "email": { "type": "string", "description": "User email" },
+        "role": { "type": "string", "enum": ["admin", "member"], "description": "Effective role" },
+        "roleLabel": { "type": "string", "description": "Role display label" },
+        "online": { "type": "boolean", "description": "Whether session is currently active in foreground" },
+        "activeScreen": { "type": "string", "description": "Current screen or tab in app" },
+        "lastSeenMillis": { "type": "integer", "description": "Client heartbeat epoch millis" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "name", "house", "email", "role", "roleLabel", "online", "activeScreen", "lastSeenMillis", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Real-time audit and activity analytics stream across all user actions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Actor Firebase Auth UID" },
+        "userName": { "type": "string", "description": "Actor display name" },
+        "userEmail": { "type": "string", "description": "Actor email" },
+        "userRole": { "type": "string", "description": "Actor role label" },
+        "house": { "type": "string", "description": "Actor house number" },
+        "actionType": { "type": "string", "description": "Action category e.g. LOGIN, NAVIGATE, PAYMENT_SUBMIT, RECEIPT_SCAN, ADMIN_ACTION" },
+        "screen": { "type": "string", "description": "Screen context" },
+        "detail": { "type": "string", "description": "Human-readable action summary" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())" }
+      },
+      "required": ["userId", "userName", "userEmail", "userRole", "house", "actionType", "screen", "detail", "createdAt"]
+    },
+    "FinanceEntry": {
+      "title": "FinanceEntry",
+      "description": "Block financial ledger entry (Keuangan Masuk, Keuangan Keluar, Kas Blok), read-only for Warga & Pengurus Blok, managed exclusively by Primary Admin.",
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["masuk", "keluar", "kas_blok"], "description": "Entry classification" },
+        "title": { "type": "string", "description": "Entry title or description" },
+        "category": { "type": "string", "description": "Category e.g. Keamanan, Kebersihan, Saldo Kas" },
+        "amount": { "type": "integer", "description": "Amount in IDR" },
+        "month": { "type": "string", "description": "Billing period YYYY-MM" },
+        "dateLabel": { "type": "string", "description": "Human-readable entry date" },
+        "note": { "type": "string", "description": "Optional additional note" },
+        "createdByUid": { "type": "string", "description": "Primary Admin UID" },
+        "createdByName": { "type": "string", "description": "Primary Admin display name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["kind", "title", "category", "amount", "month", "dateLabel", "note", "createdByUid", "createdByName", "createdAt", "updatedAt"]
+    },
+    "BudgetPlan": {
+      "title": "BudgetPlan",
+      "description": "Block budget plan (Rencana Anggaran), read-only for Warga & Pengurus Blok, managed exclusively by Primary Admin.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Budget plan item title" },
+        "category": { "type": "string", "description": "Budget category" },
+        "month": { "type": "string", "description": "Target period YYYY-MM" },
+        "plannedAmount": { "type": "integer", "description": "Planned budget in IDR" },
+        "realizedAmount": { "type": "integer", "description": "Realized/spent amount in IDR" },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "completed"], "description": "Execution status" },
+        "note": { "type": "string", "description": "Optional budget notes" },
+        "createdByUid": { "type": "string", "description": "Primary Admin UID" },
+        "updatedByName": { "type": "string", "description": "Updater display name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["title", "category", "month", "plannedAmount", "realizedAmount", "status", "note", "createdByUid", "updatedByName", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
     "/admins/{uid}": {
       "schema": { "$ref": "#/entities/AdminRecord" },
       "description": "Delegated admin authorization records keyed by Firebase Auth UID"
+    },
+    "/admin_meta/{docId}": {
+      "schema": { "$ref": "#/entities/DelegatedAdminCounter" },
+      "description": "Delegated admin counter document (ID: delegated_counter)"
     },
     "/admin_invites/{inviteCode}": {
       "schema": { "$ref": "#/entities/AdminInvite" },
@@ -192,11 +281,27 @@
     },
     "/admin_configs/{configId}": {
       "schema": { "$ref": "#/entities/AdminWebhookConfig" },
-      "description": "Admin-only webhook endpoint configuration (ID: dana_webhook)"
+      "description": "Primary-admin-only webhook endpoint configuration (ID: dana_webhook)"
     },
     "/dana_webhook_events/{eventId}": {
       "schema": { "$ref": "#/entities/DanaWebhookEvent" },
-      "description": "Real-time incoming DANA webhook transactions (admin-only)"
+      "description": "Real-time incoming DANA webhook transactions (Primary Admin only)"
+    },
+    "/user_presence/{uid}": {
+      "schema": { "$ref": "#/entities/UserPresence" },
+      "description": "Live online status per user (owner write, Primary Admin read)"
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Real-time activity analytics stream (signed-in append, Primary Admin read)"
+    },
+    "/finance_entries/{entryId}": {
+      "schema": { "$ref": "#/entities/FinanceEntry" },
+      "description": "Cashflow ledger (Masuk, Keluar, Kas Blok) - read by all signed-in, write by Primary Admin"
+    },
+    "/budget_plans/{planId}": {
+      "schema": { "$ref": "#/entities/BudgetPlan" },
+      "description": "Rencana Anggaran Blok - read by all signed-in, write by Primary Admin"
     }
   }
 }

@@ -34,13 +34,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -103,13 +106,10 @@ import com.example.data.model.SystemSettings
 import com.example.ui.components.QrisParser
 import com.example.ui.components.ScannedQrisInfo
 import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald950
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -399,8 +399,12 @@ private fun LiveCameraQrContent(
             border = BorderStroke(1.dp, Emerald500.copy(alpha = 0.45f)),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing
+                        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                        .union(WindowInsets(bottom = 48.dp))
+                )
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)
                 .widthIn(max = 460.dp)
                 .fillMaxWidth()
         ) {
@@ -511,6 +515,7 @@ private fun CameraPermissionRequiredContent(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val ac = adaptiveColors
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -520,8 +525,8 @@ private fun CameraPermissionRequiredContent(
     ) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             modifier = Modifier.widthIn(max = 420.dp)
         ) {
             Column(
@@ -530,7 +535,7 @@ private fun CameraPermissionRequiredContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Surface(
-                    color = Emerald50,
+                    color = ac.emeraldSurface,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.size(64.dp)
                 ) {
@@ -538,7 +543,7 @@ private fun CameraPermissionRequiredContent(
                         Icon(
                             imageVector = Icons.Filled.CameraAlt,
                             contentDescription = null,
-                            tint = Emerald700,
+                            tint = ac.emeraldText,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -547,7 +552,7 @@ private fun CameraPermissionRequiredContent(
                 Text(
                     text = stringResource(R.string.camera_permission_title),
                     style = MaterialTheme.typography.titleLarge,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center
                 )
@@ -559,7 +564,7 @@ private fun CameraPermissionRequiredContent(
                         stringResource(R.string.camera_permission_rationale)
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Slate600,
+                    color = ac.textSecondary,
                     textAlign = TextAlign.Center
                 )
 
@@ -567,7 +572,7 @@ private fun CameraPermissionRequiredContent(
 
                 Button(
                     onClick = if (permanentlyDenied) onOpenSettings else onRequestPermission,
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -604,7 +609,7 @@ private fun CameraPermissionRequiredContent(
                         .heightIn(min = 48.dp)
                         .testTag("close_qris_scanner_permission_button")
                 ) {
-                    Text("Tutup")
+                    Text("Tutup", color = ac.textPrimary)
                 }
             }
         }
@@ -613,6 +618,7 @@ private fun CameraPermissionRequiredContent(
 
 @Composable
 private fun CameraUnavailableContent(onDismiss: () -> Unit) {
+    val ac = adaptiveColors
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -622,7 +628,8 @@ private fun CameraUnavailableContent(onDismiss: () -> Unit) {
     ) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             modifier = Modifier.widthIn(max = 420.dp)
         ) {
             Column(
@@ -633,24 +640,24 @@ private fun CameraUnavailableContent(onDismiss: () -> Unit) {
                 Icon(
                     imageVector = Icons.Filled.CameraAlt,
                     contentDescription = null,
-                    tint = Slate600,
+                    tint = ac.textSecondary,
                     modifier = Modifier.size(40.dp)
                 )
                 Text(
                     text = "Kamera Tidak Tersedia",
                     style = MaterialTheme.typography.titleMedium,
-                    color = Slate900,
+                    color = ac.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Perangkat ini tidak memiliki kamera aktif. Anda tetap dapat membayar menggunakan tombol QRIS atau Salin Nomor DANA.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Slate600,
+                    color = ac.textSecondary,
                     textAlign = TextAlign.Center
                 )
                 Button(
                     onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()

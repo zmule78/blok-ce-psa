@@ -54,19 +54,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.Announcement
 import com.example.ui.components.AnnouncementImage
+import com.example.ui.components.StaggeredEntrance
 import com.example.ui.components.uriToCompressedDataUri
-import com.example.ui.theme.DanaBlue
-import com.example.ui.theme.DanaLight
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
-import com.example.ui.theme.Rose100
-import com.example.ui.theme.Rose50
-import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
+import com.example.ui.theme.adaptiveFieldColors
 import com.example.ui.viewmodel.MainUiState
 
 @Composable
@@ -83,6 +76,7 @@ fun InfoTab(
     onDeleteAnnouncement: (String) -> Unit
 ) {
     val isAdmin = state.currentResident?.adminRole == true
+    val ac = adaptiveColors
     var editingAnnouncement by remember { mutableStateOf<Announcement?>(null) }
     var showForm by remember { mutableStateOf(false) }
 
@@ -95,7 +89,7 @@ fun InfoTab(
             Text(
                 text = "Informasi Warga",
                 style = MaterialTheme.typography.titleMedium,
-                color = Slate900
+                color = ac.textPrimary
             )
             if (isAdmin) {
                 Button(
@@ -103,7 +97,7 @@ fun InfoTab(
                         editingAnnouncement = null
                         showForm = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald600),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald600, contentColor = Color.White),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .heightIn(min = 48.dp)
@@ -123,8 +117,8 @@ fun InfoTab(
         if (state.announcements.isEmpty()) {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Slate200)
+                colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                border = BorderStroke(1.dp, ac.borderSubtle)
             ) {
                 Column(
                     modifier = Modifier
@@ -136,22 +130,23 @@ fun InfoTab(
                     Icon(
                         imageVector = Icons.Filled.Newspaper,
                         contentDescription = null,
-                        tint = Slate400,
+                        tint = ac.textMuted,
                         modifier = Modifier.size(36.dp)
                     )
                     Text(
                         text = "Belum ada informasi warga",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Slate400
+                        color = ac.textMuted
                     )
                 }
             }
         } else {
-            state.announcements.forEach { item ->
+            state.announcements.forEachIndexed { idx, item ->
+                StaggeredEntrance(delayMillis = (idx * 45).coerceAtMost(220)) {
                 Card(
                     shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Slate200)
+                    colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+                    border = BorderStroke(1.dp, ac.borderSubtle)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -173,25 +168,26 @@ fun InfoTab(
                         ) {
                             if (item.urgent) {
                                 Surface(
-                                    color = Rose100,
-                                    shape = CircleShape
+                                    color = ac.roseSurface,
+                                    shape = CircleShape,
+                                    border = BorderStroke(1.dp, ac.roseBorder)
                                 ) {
                                     Text(
                                         text = "PENTING",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Rose600,
+                                        color = ac.roseText,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
                             Surface(
-                                color = Slate100,
+                                color = ac.subtleContainer,
                                 shape = CircleShape
                             ) {
                                 Text(
                                     text = item.category,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Slate600,
+                                    color = ac.textSecondary,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
                             }
@@ -200,15 +196,15 @@ fun InfoTab(
                         Text(
                             text = item.title,
                             style = MaterialTheme.typography.titleMedium,
-                            color = Slate900
+                            color = ac.textPrimary
                         )
                         Text(
                             text = item.content,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Slate600
+                            color = ac.textSecondary
                         )
 
-                        HorizontalDivider(color = Slate100)
+                        HorizontalDivider(color = ac.divider)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -218,13 +214,13 @@ fun InfoTab(
                             Text(
                                 text = "${item.displayDate} • ${item.authorName}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate400,
+                                color = ac.textMuted,
                                 modifier = Modifier.weight(1f)
                             )
                             if (isAdmin) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Surface(
-                                        color = DanaLight,
+                                        color = ac.danaSurface,
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
                                         IconButton(
@@ -239,13 +235,13 @@ fun InfoTab(
                                             Icon(
                                                 imageVector = Icons.Filled.Edit,
                                                 contentDescription = "Edit pengumuman",
-                                                tint = DanaBlue,
+                                                tint = ac.danaText,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
                                     Surface(
-                                        color = Rose50,
+                                        color = ac.roseSurface,
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
                                         IconButton(
@@ -257,7 +253,7 @@ fun InfoTab(
                                             Icon(
                                                 imageVector = Icons.Filled.Delete,
                                                 contentDescription = "Hapus pengumuman",
-                                                tint = Rose600,
+                                                tint = ac.roseText,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -266,6 +262,7 @@ fun InfoTab(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -290,6 +287,7 @@ private fun AnnouncementFormDialog(
     onSubmit: (title: String, category: String, imageUrl: String, content: String, urgent: Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val ac = adaptiveColors
     var title by remember { mutableStateOf(existing?.title ?: "") }
     var category by remember { mutableStateOf(existing?.category ?: "Pengumuman") }
     var imageUrl by remember { mutableStateOf(existing?.imageUrl ?: "") }
@@ -308,7 +306,8 @@ private fun AnnouncementFormDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle)
         ) {
             Column(
                 modifier = Modifier
@@ -324,12 +323,13 @@ private fun AnnouncementFormDialog(
                     Text(
                         text = if (existing != null) "Edit Info" else "Tulis Info Baru",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Filled.Close,
-                            contentDescription = "Tutup form"
+                            contentDescription = "Tutup form",
+                            tint = ac.textMuted
                         )
                     }
                 }
@@ -339,6 +339,7 @@ private fun AnnouncementFormDialog(
                     onValueChange = { title = it },
                     label = { Text("Judul") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -350,6 +351,7 @@ private fun AnnouncementFormDialog(
                     onValueChange = { category = it },
                     label = { Text("Kategori") },
                     singleLine = true,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -368,11 +370,13 @@ private fun AnnouncementFormDialog(
                     Icon(
                         imageVector = Icons.Filled.Image,
                         contentDescription = null,
+                        tint = ac.emeraldText,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        if (imageUrl.isBlank()) "Pilih Foto (Opsional)" else "Foto Terpasang — Ganti"
+                        text = if (imageUrl.isBlank()) "Pilih Foto (Opsional)" else "Foto Terpasang — Ganti",
+                        color = ac.textPrimary
                     )
                 }
 
@@ -381,6 +385,7 @@ private fun AnnouncementFormDialog(
                     onValueChange = { content = it },
                     label = { Text("Isi Pengumuman") },
                     minLines = 3,
+                    colors = adaptiveFieldColors(),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -396,16 +401,16 @@ private fun AnnouncementFormDialog(
                         onCheckedChange = { urgent = it }
                     )
                     Text(
-                        text = "Tandai Penting",
+                        text = "Tandai Penting (Picu Notifikasi Device)",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Slate900
+                        color = ac.textPrimary
                     )
                 }
 
                 Button(
                     onClick = { onSubmit(title, category, imageUrl, content, urgent) },
                     enabled = title.isNotBlank() && content.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald700, contentColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()

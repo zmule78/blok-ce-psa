@@ -108,7 +108,9 @@ data class PaymentEntity(
     val status: String,
     val dateLabel: String,
     val method: String,
-    val note: String
+    val note: String,
+    val receiptImageUrl: String = "",
+    val receiptOcrText: String = ""
 ) {
     fun toDomain() = Payment(
         id = id,
@@ -120,6 +122,8 @@ data class PaymentEntity(
         dateLabel = dateLabel,
         method = method,
         note = note,
+        receiptImageUrl = receiptImageUrl,
+        receiptOcrText = receiptOcrText,
         offlineQueued = false
     )
 }
@@ -133,7 +137,9 @@ fun Payment.toEntity() = PaymentEntity(
     status = status,
     dateLabel = dateLabel,
     method = method,
-    note = note
+    note = note,
+    receiptImageUrl = receiptImageUrl,
+    receiptOcrText = receiptOcrText
 )
 
 @Entity(tableName = "announcements")
@@ -211,6 +217,8 @@ data class PendingPaymentEntity(
     val dateLabel: String,
     val method: String,
     val note: String,
+    val receiptImageUrl: String = "",
+    val receiptOcrText: String = "",
     val queuedAtMillis: Long = System.currentTimeMillis()
 ) {
     fun toDomain() = Payment(
@@ -223,6 +231,8 @@ data class PendingPaymentEntity(
         dateLabel = dateLabel,
         method = method,
         note = note,
+        receiptImageUrl = receiptImageUrl,
+        receiptOcrText = receiptOcrText,
         offlineQueued = true
     )
 }

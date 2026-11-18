@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
@@ -69,8 +70,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.AdminDashboardAnalytics
+import com.example.data.model.CurrentMonthStatusSummary
 import com.example.data.model.MonthlyTrendPoint
 import com.example.data.model.computeAdminDashboardAnalytics
+import com.example.data.model.computeCurrentMonthStatusSummary
 import com.example.data.model.formatCompactRupiah
 import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
@@ -78,28 +81,20 @@ import com.example.ui.components.AnimatedPercentText
 import com.example.ui.components.AnimatedRupiahText
 import com.example.ui.components.LivePulseDot
 import com.example.ui.components.StaggeredEntrance
-import com.example.ui.theme.Amber50
 import com.example.ui.theme.Amber600
 import com.example.ui.theme.DanaBlue
 import com.example.ui.theme.Emerald100
-import com.example.ui.theme.Emerald50
 import com.example.ui.theme.Emerald500
 import com.example.ui.theme.Emerald600
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald800
 import com.example.ui.theme.Emerald950
 import com.example.ui.theme.JetBrainsMonoFamily
-import com.example.ui.theme.Rose100
-import com.example.ui.theme.Rose50
 import com.example.ui.theme.Rose600
-import com.example.ui.theme.Slate100
-import com.example.ui.theme.Slate200
 import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate50
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate600
 import com.example.ui.theme.Slate800
 import com.example.ui.theme.Slate900
+import com.example.ui.theme.adaptiveColors
 import com.example.ui.viewmodel.MainUiState
 import kotlin.math.roundToInt
 
@@ -113,6 +108,7 @@ fun AdminAnalyticsDashboardCard(
     state: MainUiState,
     onExportRecapCsv: () -> Unit
 ) {
+    val ac = adaptiveColors
     var windowMonths by remember { mutableIntStateOf(6) }
     var chartMode by remember { mutableStateOf(TrendChartMode.AREA) }
 
@@ -132,6 +128,18 @@ fun AdminAnalyticsDashboardCard(
         )
     }
 
+    val residentStatusSummary: CurrentMonthStatusSummary = remember(
+        state.selectedMonth,
+        state.allResidents,
+        state.allPayments
+    ) {
+        computeCurrentMonthStatusSummary(
+            month = state.selectedMonth,
+            residents = state.allResidents,
+            payments = state.allPayments
+        )
+    }
+
     val trends = analytics.monthlyTrends
     val defaultIndex = remember(trends, state.selectedMonth) {
         trends.indexOfFirst { it.monthCode == state.selectedMonth }
@@ -146,8 +154,8 @@ fun AdminAnalyticsDashboardCard(
     StaggeredEntrance {
         Card(
             shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Slate200),
+            colors = CardDefaults.cardColors(containerColor = ac.cardContainer),
+            border = BorderStroke(1.dp, ac.borderSubtle),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -169,7 +177,7 @@ fun AdminAnalyticsDashboardCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         Surface(
-                            color = Emerald50,
+                            color = ac.emeraldSurface,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.size(40.dp)
                         ) {
@@ -177,7 +185,7 @@ fun AdminAnalyticsDashboardCard(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                                     contentDescription = null,
-                                    tint = Emerald700,
+                                    tint = ac.emeraldText,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -190,7 +198,7 @@ fun AdminAnalyticsDashboardCard(
                                 Text(
                                     text = "Analitik Kas Visual",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Slate900,
+                                    color = ac.textPrimary,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 LivePulseDot(color = Emerald500, size = 6.dp)
@@ -198,7 +206,7 @@ fun AdminAnalyticsDashboardCard(
                             Text(
                                 text = "Tren bulanan • ${monthLabel(state.selectedMonth)}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate500
+                                color = ac.textMuted
                             )
                         }
                     }
@@ -213,10 +221,11 @@ fun AdminAnalyticsDashboardCard(
                         Icon(
                             imageVector = Icons.Filled.Download,
                             contentDescription = "Ekspor rekap CSV",
+                            tint = ac.emeraldText,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("CSV", fontWeight = FontWeight.Bold)
+                        Text("CSV", fontWeight = FontWeight.Bold, color = ac.textPrimary)
                     }
                 }
 
@@ -225,7 +234,7 @@ fun AdminAnalyticsDashboardCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Dana Masuk Card
+                    // Dana Masuk Card (Dark Emerald Hero -> white text safe)
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -286,15 +295,15 @@ fun AdminAnalyticsDashboardCard(
                         }
                     }
 
-                    // Belum Terbayar Card
+                    // Belum Terbayar Card (Adaptive Surface)
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Brush.linearGradient(listOf(Rose50, Color.White)))
+                            .background(ac.roseSurface)
                             .drawBehind {
                                 drawCircle(
-                                    color = Rose600.copy(alpha = 0.09f),
+                                    color = Rose600.copy(alpha = 0.12f),
                                     radius = size.maxDimension * 0.5f,
                                     center = Offset(size.width * 0.9f, size.height * 0.15f)
                                 )
@@ -304,7 +313,7 @@ fun AdminAnalyticsDashboardCard(
                         Surface(
                             color = Color.Transparent,
                             shape = RoundedCornerShape(20.dp),
-                            border = BorderStroke(1.dp, Rose100),
+                            border = BorderStroke(1.dp, ac.roseBorder),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("kpi_belum_terbayar")
@@ -321,11 +330,11 @@ fun AdminAnalyticsDashboardCard(
                                     Icon(
                                         imageVector = Icons.Filled.WarningAmber,
                                         contentDescription = null,
-                                        tint = Rose600,
+                                        tint = ac.roseText,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Surface(
-                                        color = if (analytics.totalPendingSelectedMonth > 0L) Amber50 else Rose100,
+                                        color = if (analytics.totalPendingSelectedMonth > 0L) ac.amberSurface else ac.cardContainer.copy(alpha = 0.7f),
                                         shape = CircleShape
                                     ) {
                                         Text(
@@ -335,7 +344,7 @@ fun AdminAnalyticsDashboardCard(
                                                 "Tertunggak"
                                             },
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = if (analytics.totalPendingSelectedMonth > 0L) Amber600 else Rose600,
+                                            color = if (analytics.totalPendingSelectedMonth > 0L) ac.amberText else ac.roseText,
                                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                         )
                                     }
@@ -343,18 +352,18 @@ fun AdminAnalyticsDashboardCard(
                                 Text(
                                     text = "BELUM TERBAYAR",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Rose600
+                                    color = ac.roseText
                                 )
                                 AnimatedRupiahText(
                                     targetAmount = analytics.totalUnpaidSelectedMonth,
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = Slate900,
+                                    color = ac.textPrimary,
                                     useMonospace = true
                                 )
                                 Text(
                                     text = "Total Unpaid: ${formatCompactRupiah(analytics.totalRecordedUnpaidAllPeriods)}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Slate500,
+                                    color = ac.textSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -362,6 +371,9 @@ fun AdminAnalyticsDashboardCard(
                         }
                     }
                 }
+
+                // Current-Month Resident Payment Status Visual Summary (Paid vs Pending vs Unpaid)
+                ResidentMonthStatusSummaryCard(summary = residentStatusSummary)
 
                 // Chart Mode & Timeframe Controls
                 Row(
@@ -402,7 +414,7 @@ fun AdminAnalyticsDashboardCard(
                     }
                 }
 
-                // Interactive Recharts-style Tooltip Banner
+                // Interactive Tooltip Banner (Explicitly dark slate tooltip with white text)
                 if (activePoint != null) {
                     AnimatedContent(
                         targetState = activePoint,
@@ -414,6 +426,7 @@ fun AdminAnalyticsDashboardCard(
                         Surface(
                             color = Slate900,
                             shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, ac.borderSubtle.copy(alpha = 0.4f)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("chart_tooltip_card")
@@ -467,11 +480,11 @@ fun AdminAnalyticsDashboardCard(
                     }
                 }
 
-                // Recharts-style Interactive Monthly Trend Chart
+                // Interactive Monthly Trend Chart
                 Surface(
-                    color = Slate50,
+                    color = ac.cardElevated,
                     shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Slate200),
+                    border = BorderStroke(1.dp, ac.borderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -491,7 +504,7 @@ fun AdminAnalyticsDashboardCard(
                             Text(
                                 text = "Belum ada data transaksi untuk ditampilkan pada grafik.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate500,
+                                color = ac.textMuted,
                                 modifier = Modifier.padding(vertical = 24.dp)
                             )
                         } else {
@@ -507,9 +520,9 @@ fun AdminAnalyticsDashboardCard(
 
                 // Animated Donut Composition Card
                 Surface(
-                    color = Slate50,
+                    color = ac.cardElevated,
                     shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Slate200),
+                    border = BorderStroke(1.dp, ac.borderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -533,7 +546,7 @@ fun AdminAnalyticsDashboardCard(
                             Text(
                                 text = "Komposisi ${monthLabel(state.selectedMonth)}",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Slate900,
+                                color = ac.textPrimary,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             CompositionLegendRow(
@@ -560,12 +573,229 @@ fun AdminAnalyticsDashboardCard(
 }
 
 @Composable
+private fun ResidentMonthStatusSummaryCard(
+    summary: CurrentMonthStatusSummary
+) {
+    val ac = adaptiveColors
+    val total = summary.totalActiveResidents.coerceAtLeast(1)
+    val paidRatio = summary.paidResidents.toFloat() / total.toFloat()
+    val pendingRatio = summary.pendingResidents.toFloat() / total.toFloat()
+    val unpaidRatio = summary.unpaidResidents.toFloat() / total.toFloat()
+
+    val barProgress = remember { Animatable(0f) }
+    LaunchedEffect(summary) {
+        barProgress.snapTo(0f)
+        barProgress.animateTo(1f, animationSpec = tween(700, easing = FastOutSlowInEasing))
+    }
+
+    Surface(
+        color = ac.cardElevated,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, ac.borderSubtle),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("current_month_status_summary_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = ac.emeraldSurface,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Groups,
+                            contentDescription = null,
+                            tint = ac.emeraldText,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Status Pembayaran Warga",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = ac.textPrimary,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Periode ${monthLabel(summary.month)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ac.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    color = ac.subtleContainer,
+                    shape = CircleShape,
+                    border = BorderStroke(1.dp, ac.borderSubtle)
+                ) {
+                    Text(
+                        text = "${summary.totalActiveResidents} Warga",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ac.textPrimary,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            // Proportional Segmented Horizontal Bar with subtle segment gaps
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(CircleShape)
+            ) {
+                val trackColor = ac.subtleContainer
+                drawRect(color = trackColor)
+                if (summary.totalActiveResidents > 0) {
+                    val p = barProgress.value
+                    val gapPx = 3.dp.toPx()
+                    val totalW = size.width
+                    val segments: List<Pair<Color, Float>> = listOfNotNull(
+                        if (summary.paidResidents > 0) Emerald600 to (totalW * paidRatio * p) else null,
+                        if (summary.pendingResidents > 0) Amber600 to (totalW * pendingRatio * p) else null,
+                        if (summary.unpaidResidents > 0) Rose600 to (totalW * unpaidRatio * p) else null
+                    )
+                    var cursorX = 0f
+                    segments.forEachIndexed { index, (segColor, segWidth) ->
+                        val effectiveWidth = if (index < segments.lastIndex && segWidth > gapPx * 1.5f) {
+                            segWidth - gapPx
+                        } else {
+                            segWidth
+                        }
+                        if (effectiveWidth > 0f) {
+                            drawRect(
+                                color = segColor,
+                                topLeft = Offset(cursorX, 0f),
+                                size = Size(effectiveWidth, size.height)
+                            )
+                        }
+                        cursorX += segWidth
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusBreakdownPill(
+                    label = "Lunas",
+                    count = summary.paidResidents,
+                    total = summary.totalActiveResidents,
+                    dotColor = Emerald600,
+                    bg = ac.emeraldSurface,
+                    fg = ac.emeraldText,
+                    modifier = Modifier.weight(1f)
+                )
+                StatusBreakdownPill(
+                    label = "Verifikasi",
+                    count = summary.pendingResidents,
+                    total = summary.totalActiveResidents,
+                    dotColor = Amber600,
+                    bg = ac.amberSurface,
+                    fg = ac.amberText,
+                    modifier = Modifier.weight(1f)
+                )
+                StatusBreakdownPill(
+                    label = "Belum Bayar",
+                    count = summary.unpaidResidents,
+                    total = summary.totalActiveResidents,
+                    dotColor = Rose600,
+                    bg = ac.roseSurface,
+                    fg = ac.roseText,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBreakdownPill(
+    label: String,
+    count: Int,
+    total: Int,
+    dotColor: Color,
+    bg: Color,
+    fg: Color,
+    modifier: Modifier = Modifier
+) {
+    val ac = adaptiveColors
+    val pct = if (total > 0) ((count.toFloat() / total.toFloat()) * 100f).roundToInt() else 0
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, dotColor.copy(alpha = 0.25f)),
+        modifier = modifier.heightIn(min = 76.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 9.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = fg,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMonoFamily),
+                color = ac.textPrimary,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
+            Text(
+                text = "$pct% warga",
+                style = MaterialTheme.typography.labelSmall,
+                color = ac.textSecondary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 private fun InteractiveMonthlyTrendCanvas(
     trends: List<MonthlyTrendPoint>,
     chartMode: TrendChartMode,
     selectedIndex: Int,
     onSelectIndex: (Int) -> Unit
 ) {
+    val ac = adaptiveColors
     val maxY = remember(trends) {
         val rawMax = trends.maxOfOrNull { maxOf(it.totalPaid, it.unpaidAmount, it.expectedAmount) } ?: 0L
         rawMax.coerceAtLeast(100_000L)
@@ -581,6 +811,9 @@ private fun InteractiveMonthlyTrendCanvas(
     }
 
     val midY = maxY / 2L
+    val gridColor = ac.borderSubtle
+    val crosshairColor = if (ac.isDark) Slate400.copy(alpha = 0.55f) else Slate800.copy(alpha = 0.45f)
+
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier
@@ -599,19 +832,19 @@ private fun InteractiveMonthlyTrendCanvas(
                 Text(
                     text = formatCompactRupiah(maxY),
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                    color = Slate400,
+                    color = ac.textMuted,
                     maxLines = 1
                 )
                 Text(
                     text = formatCompactRupiah(midY),
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                    color = Slate400,
+                    color = ac.textMuted,
                     maxLines = 1
                 )
                 Text(
                     text = "Rp0",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-                    color = Slate400
+                    color = ac.textMuted
                 )
             }
 
@@ -652,12 +885,11 @@ private fun InteractiveMonthlyTrendCanvas(
                 val plotH = (size.height - padTop - padBottom).coerceAtLeast(1f)
                 val progress = revealAnim.value.coerceIn(0f, 1f)
 
-                // Dashed Cartesian Grid Lines (0%, 50%, 100%)
                 val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f))
                 listOf(0f, 0.5f, 1f).forEach { ratio ->
                     val y = padTop + plotH * ratio
                     drawLine(
-                        color = Slate200,
+                        color = gridColor,
                         start = Offset(padH, y),
                         end = Offset(padH + plotW, y),
                         strokeWidth = 1.dp.toPx(),
@@ -682,7 +914,6 @@ private fun InteractiveMonthlyTrendCanvas(
                     val unpaidPts = trends.mapIndexed { idx, pt -> Offset(xFor(idx), yFor(pt.unpaidAmount)) }
 
                     clipRect(right = padH + plotW * progress + 8.dp.toPx()) {
-                        // Unpaid Area & Curve (background layer)
                         drawSmoothAreaAndLine(
                             points = unpaidPts,
                             bottomY = padTop + plotH,
@@ -690,7 +921,6 @@ private fun InteractiveMonthlyTrendCanvas(
                             fillTopColor = Rose600.copy(alpha = 0.16f),
                             strokePx = 2.dp.toPx()
                         )
-                        // Paid Area & Curve (foreground hero layer)
                         drawSmoothAreaAndLine(
                             points = paidPts,
                             bottomY = padTop + plotH,
@@ -700,10 +930,9 @@ private fun InteractiveMonthlyTrendCanvas(
                         )
                     }
 
-                    // Active Selected Crosshair & Halo Points
                     val activeX = xFor(selectedIndex.coerceIn(0, trends.lastIndex))
                     drawLine(
-                        color = Slate800.copy(alpha = 0.45f),
+                        color = crosshairColor,
                         start = Offset(activeX, padTop),
                         end = Offset(activeX, padTop + plotH),
                         strokeWidth = 1.2.dp.toPx(),
@@ -712,12 +941,10 @@ private fun InteractiveMonthlyTrendCanvas(
                     val activePaidY = paidPts.getOrNull(selectedIndex)?.y ?: (padTop + plotH)
                     val activeUnpaidY = unpaidPts.getOrNull(selectedIndex)?.y ?: (padTop + plotH)
 
-                    // Rose active point
                     drawCircle(color = Rose600.copy(alpha = 0.22f), radius = 9.dp.toPx(), center = Offset(activeX, activeUnpaidY))
                     drawCircle(color = Rose600, radius = 4.5.dp.toPx(), center = Offset(activeX, activeUnpaidY))
                     drawCircle(color = Color.White, radius = 2.dp.toPx(), center = Offset(activeX, activeUnpaidY))
 
-                    // Emerald active point
                     drawCircle(color = Emerald500.copy(alpha = 0.28f), radius = 10.dp.toPx(), center = Offset(activeX, activePaidY))
                     drawCircle(color = Emerald600, radius = 5.5.dp.toPx(), center = Offset(activeX, activePaidY))
                     drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = Offset(activeX, activePaidY))
@@ -774,7 +1001,7 @@ private fun InteractiveMonthlyTrendCanvas(
                 Text(
                     text = if (showLabel) pt.shortLabel else "",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (idx == selectedIndex) Emerald700 else Slate400,
+                    color = if (idx == selectedIndex) ac.emeraldText else ac.textMuted,
                     fontWeight = if (idx == selectedIndex) FontWeight.Black else FontWeight.Medium,
                     modifier = Modifier.clickable { onSelectIndex(idx) }
                 )
@@ -828,12 +1055,14 @@ private fun CollectionDonutGauge(
     unpaidAmount: Long,
     percent: Int
 ) {
+    val ac = adaptiveColors
     val total = (paidAmount + pendingAmount + unpaidAmount).coerceAtLeast(1L).toFloat()
     val sweepAnim = remember { Animatable(0f) }
     LaunchedEffect(paidAmount, pendingAmount, unpaidAmount) {
         sweepAnim.snapTo(0f)
         sweepAnim.animateTo(1f, animationSpec = tween(750, easing = FastOutSlowInEasing))
     }
+    val trackColor = ac.borderSubtle
 
     Box(
         modifier = Modifier.size(104.dp),
@@ -845,9 +1074,8 @@ private fun CollectionDonutGauge(
             val arcSize = Size(size.width - stroke, size.height - stroke)
             val topLeft = Offset(inset, inset)
 
-            // Track ring
             drawArc(
-                color = Slate200,
+                color = trackColor,
                 startAngle = 0f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -903,12 +1131,12 @@ private fun CollectionDonutGauge(
             AnimatedPercentText(
                 targetPercent = percent,
                 style = MaterialTheme.typography.titleMedium,
-                color = Slate900
+                color = ac.textPrimary
             )
             Text(
                 text = "Lunas",
                 style = MaterialTheme.typography.labelSmall,
-                color = Slate500
+                color = ac.textMuted
             )
         }
     }
@@ -921,8 +1149,9 @@ private fun ChartToggleChip(
     onClick: () -> Unit,
     tag: String
 ) {
+    val ac = adaptiveColors
     Surface(
-        color = if (selected) Emerald700 else Slate100,
+        color = if (selected) Emerald700 else ac.subtleContainer,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .heightIn(min = 38.dp)
@@ -937,7 +1166,7 @@ private fun ChartToggleChip(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (selected) Color.White else Slate600,
+                color = if (selected) Color.White else ac.textSecondary,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -952,8 +1181,9 @@ private fun ChartModeIconChip(
     onClick: () -> Unit,
     tag: String
 ) {
+    val ac = adaptiveColors
     Surface(
-        color = if (selected) DanaBlue else Slate100,
+        color = if (selected) DanaBlue else ac.subtleContainer,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .heightIn(min = 38.dp)
@@ -969,13 +1199,13 @@ private fun ChartModeIconChip(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) Color.White else Slate600,
+                tint = if (selected) Color.White else ac.textSecondary,
                 modifier = Modifier.size(15.dp)
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (selected) Color.White else Slate600,
+                color = if (selected) Color.White else ac.textSecondary,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -984,6 +1214,7 @@ private fun ChartModeIconChip(
 
 @Composable
 private fun ChartLegendDot(color: Color, label: String) {
+    val ac = adaptiveColors
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -997,7 +1228,7 @@ private fun ChartLegendDot(color: Color, label: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = Slate600
+            color = ac.textSecondary
         )
     }
 }
@@ -1043,6 +1274,7 @@ private fun CompositionLegendRow(
     label: String,
     value: String
 ) {
+    val ac = adaptiveColors
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1062,7 +1294,7 @@ private fun CompositionLegendRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate600,
+                color = ac.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1070,7 +1302,7 @@ private fun CompositionLegendRow(
         Text(
             text = value,
             style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFamily),
-            color = Slate900,
+            color = ac.textPrimary,
             fontWeight = FontWeight.Bold
         )
     }

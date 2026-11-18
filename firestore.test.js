@@ -435,7 +435,7 @@ test("Admin invites & delegated admins: only primary admin creates invites, atom
   });
   await assertSucceeds(aliceBatch.commit());
 
-  // Delegated admin (Alice) can now update system_settings/config
+  // Delegated Pengurus Blok (Alice) CANNOT update system_settings/config (Admin Utama only)
   await assertSucceeds(
     adminDb.collection("system_settings").doc("config").set({
       blokName: "Blok CE PSA",
@@ -454,8 +454,14 @@ test("Admin invites & delegated admins: only primary admin creates invites, atom
       updatedAt: created,
     })
   );
-  await assertSucceeds(
+  await assertFails(
     aliceDb.collection("system_settings").doc("config").update({
+      danaNumber: "081234567890",
+      updatedAt: tsPast(500),
+    })
+  );
+  await assertSucceeds(
+    adminDb.collection("system_settings").doc("config").update({
       danaNumber: "081234567890",
       updatedAt: tsPast(500),
     })
@@ -514,7 +520,7 @@ test("Auto-generated monthly unpaid bills: admin creates unpaid, resident confir
     })
   );
 
-  // Alice can submit payment confirmation (unpaid -> pending) on her own bill
+  // Alice can submit payment confirmation with ML Kit scanned receipt (unpaid -> pending)
   await assertSucceeds(
     aliceDb.collection("payments").doc(autoPayId).update({
       status: "pending",
@@ -522,6 +528,8 @@ test("Auto-generated monthly unpaid bills: admin creates unpaid, resident confir
       dateLabel: "02 Des 2050",
       method: "DANA QRIS",
       note: "Sudah transfer QRIS",
+      receiptImageUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+      receiptOcrText: "Scan Struk: Rp 50.000 • Transfer Berhasil DANA",
       updatedAt: tsPast(1000),
     })
   );
@@ -536,7 +544,7 @@ test("Auto-generated monthly unpaid bills: admin creates unpaid, resident confir
   );
 });
 
-test("Admin role promotion, demotion, resident profile editing, and permanent primary admin protection", async () => {
+test("Two-tier Admin: Admin Utama full control, Pengurus Blok restricted to member edits & max 3 delegated admins", async () => {
   const aliceDb = testEnv.authenticatedContext(ALICE_UID, {
     email: "alice@example.com",
     email_verified: true,
@@ -549,10 +557,13 @@ test("Admin role promotion, demotion, resident profile editing, and permanent pr
     email: ADMIN_EMAIL,
     email_verified: true,
   }).firestore();
+  const u3Db = testEnv.authenticatedContext("uid_3", { email: "u3@example.com", email_verified: true }).firestore();
+  const u4Db = testEnv.authenticatedContext("uid_4", { email: "u4@example.com", email_verified: true }).firestore();
+  const u5Db = testEnv.authenticatedContext("uid_5", { email: "u5@example.com", email_verified: true }).firestore();
 
   const created = tsPast(5000);
 
-  // Seed Primary Admin resident profile, Alice, and Bob
+  // Seed Primary Admin resident profile + 5 members
   await assertSucceeds(
     adminDb.collection("residents").doc(ADMIN_UID).set({
       userId: ADMIN_UID,
@@ -568,36 +579,29 @@ test("Admin role promotion, demotion, resident profile editing, and permanent pr
       updatedAt: created,
     })
   );
-  await assertSucceeds(
-    aliceDb.collection("residents").doc(ALICE_UID).set({
-      userId: ALICE_UID,
-      username: "alice",
-      name: "Alice",
-      house: "Blok CE-01",
-      phone: "08111",
-      email: "alice@example.com",
-      role: "member",
-      roleLabel: "Warga / Member",
-      hidmatEnabled: false,
-      createdAt: created,
-      updatedAt: created,
-    })
-  );
-  await assertSucceeds(
-    bobDb.collection("residents").doc(BOB_UID).set({
-      userId: BOB_UID,
-      username: "bob",
-      name: "Bob",
-      house: "Blok CE-02",
-      phone: "08222",
-      email: "bob@example.com",
-      role: "member",
-      roleLabel: "Warga / Member",
-      hidmatEnabled: false,
-      createdAt: created,
-      updatedAt: created,
-    })
-  );
+  for (const [uid, db, email] of [
+    [ALICE_UID, aliceDb, "alice@example.com"],
+    [BOB_UID, bobDb, "bob@example.com"],
+    ["uid_3", u3Db, "u3@example.com"],
+    ["uid_4", u4Db, "u4@example.com"],
+    ["uid_5", u5Db, "u5@example.com"],
+  ]) {
+    await assertSucceeds(
+      db.collection("residents").doc(uid).set({
+        userId: uid,
+        username: uid,
+        name: uid,
+        house: "Blok CE-01",
+        phone: "08111",
+        email,
+        role: "member",
+        roleLabel: "Warga / Member",
+        hidmatEnabled: false,
+        createdAt: created,
+        updatedAt: created,
+      })
+    );
+  }
 
   // Non-admin Bob cannot promote Alice or list all residents
   await assertFails(bobDb.collection("residents").get());
@@ -609,14 +613,14 @@ test("Admin role promotion, demotion, resident profile editing, and permanent pr
     })
   );
 
-  // Primary Admin promotes Alice to Admin via atomic batch
-  const promoteBatch = adminDb.batch();
-  promoteBatch.update(adminDb.collection("residents").doc(ALICE_UID), {
+  // Primary Admin promotes Alice & Bob to Pengurus Blok (delegated count = 2)
+  const pBatch1 = adminDb.batch();
+  pBatch1.update(adminDb.collection("residents").doc(ALICE_UID), {
     role: "admin",
     roleLabel: "Bendahara Blok CE",
     updatedAt: tsPast(1000),
   });
-  promoteBatch.set(adminDb.collection("admins").doc(ALICE_UID), {
+  pBatch1.set(adminDb.collection("admins").doc(ALICE_UID), {
     userId: ALICE_UID,
     email: "alice@example.com",
     roleLabel: "Bendahara Blok CE",
@@ -624,52 +628,134 @@ test("Admin role promotion, demotion, resident profile editing, and permanent pr
     grantedByUid: ADMIN_UID,
     createdAt: tsPast(1000),
   });
-  await assertSucceeds(promoteBatch.commit());
+  pBatch1.update(adminDb.collection("residents").doc(BOB_UID), {
+    role: "admin",
+    roleLabel: "Sekretaris Blok CE",
+    updatedAt: tsPast(1000),
+  });
+  pBatch1.set(adminDb.collection("admins").doc(BOB_UID), {
+    userId: BOB_UID,
+    email: "bob@example.com",
+    roleLabel: "Sekretaris Blok CE",
+    inviteCode: "DIRECT_ASSIGN",
+    grantedByUid: ADMIN_UID,
+    createdAt: tsPast(1000),
+  });
+  pBatch1.set(adminDb.collection("admin_meta").doc("delegated_counter"), {
+    count: 2,
+    updatedAt: tsPast(1000),
+  });
+  await assertSucceeds(pBatch1.commit());
 
-  // Promoted Admin (Alice) can now list residents/payments and edit Bob's profile
-  await assertSucceeds(aliceDb.collection("residents").get());
-  await assertSucceeds(aliceDb.collection("payments").get());
+  // Pengurus Blok (Alice) CAN edit regular member (uid_3) profile & hidmat
   await assertSucceeds(
-    aliceDb.collection("residents").doc(BOB_UID).update({
-      name: "Bob Santoso",
-      house: "Blok CE-09",
-      phone: "08999",
+    aliceDb.collection("residents").doc("uid_3").update({
+      name: "Warga 3 Updated",
       hidmatEnabled: true,
       updatedAt: tsPast(500),
     })
   );
 
-  // Promoted Admin (Alice) CANNOT demote or delete Primary Admin (kfkhoerul05@gmail.com)
+  // Pengurus Blok (Alice) CANNOT edit another Pengurus Blok's (Bob) profile/hidmat or delete ANY resident
+  await assertFails(
+    aliceDb.collection("residents").doc(BOB_UID).update({
+      name: "Edited By Alice",
+      hidmatEnabled: true,
+      updatedAt: tsPast(500),
+    })
+  );
+  await assertFails(aliceDb.collection("residents").doc("uid_3").delete());
+
+  // Primary Admin CAN edit Pengurus Blok (Bob) profile & hidmatEnabled AND delete non-primary residents
+  await assertSucceeds(
+    adminDb.collection("residents").doc(BOB_UID).update({
+      name: "Bob Updated By Utama",
+      hidmatEnabled: true,
+      updatedAt: tsPast(500),
+    })
+  );
+
+  // Pengurus Blok (Alice) CAN promote 1 more member (uid_3 -> slot 3/3 succeeds)
+  const alicePromote3 = aliceDb.batch();
+  alicePromote3.update(aliceDb.collection("residents").doc("uid_3"), {
+    role: "admin",
+    roleLabel: "Pengurus Blok",
+    updatedAt: tsPast(450),
+  });
+  alicePromote3.set(aliceDb.collection("admins").doc("uid_3"), {
+    userId: "uid_3",
+    email: "u3@example.com",
+    roleLabel: "Pengurus Blok",
+    inviteCode: "DIRECT_ASSIGN",
+    grantedByUid: ALICE_UID,
+    createdAt: tsPast(450),
+  });
+  alicePromote3.set(aliceDb.collection("admin_meta").doc("delegated_counter"), {
+    count: 3,
+    updatedAt: tsPast(450),
+  });
+  await assertSucceeds(alicePromote3.commit());
+
+  // Pengurus Blok (Alice) CANNOT exceed max 3 delegated admins (uid_4 fails!)
+  const alicePromote4 = aliceDb.batch();
+  alicePromote4.update(aliceDb.collection("residents").doc("uid_4"), {
+    role: "admin",
+    roleLabel: "Pengurus Blok",
+    updatedAt: tsPast(400),
+  });
+  alicePromote4.set(aliceDb.collection("admins").doc("uid_4"), {
+    userId: "uid_4",
+    email: "u4@example.com",
+    roleLabel: "Pengurus Blok",
+    inviteCode: "DIRECT_ASSIGN",
+    grantedByUid: ALICE_UID,
+    createdAt: tsPast(400),
+  });
+  alicePromote4.set(aliceDb.collection("admin_meta").doc("delegated_counter"), {
+    count: 4,
+    updatedAt: tsPast(400),
+  });
+  await assertFails(alicePromote4.commit());
+
+  // Primary Admin HAS NO 3-slot limit (can promote uid_4 too)
+  const adminPromote4 = adminDb.batch();
+  adminPromote4.update(adminDb.collection("residents").doc("uid_4"), {
+    role: "admin",
+    roleLabel: "Pengurus Tambahan",
+    updatedAt: tsPast(350),
+  });
+  adminPromote4.set(adminDb.collection("admins").doc("uid_4"), {
+    userId: "uid_4",
+    email: "u4@example.com",
+    roleLabel: "Pengurus Tambahan",
+    inviteCode: "DIRECT_ASSIGN",
+    grantedByUid: ADMIN_UID,
+    createdAt: tsPast(350),
+  });
+  adminPromote4.set(adminDb.collection("admin_meta").doc("delegated_counter"), {
+    count: 4,
+    updatedAt: tsPast(350),
+  });
+  await assertSucceeds(adminPromote4.commit());
+
+  // Pengurus Blok (Alice) CANNOT demote or delete Primary Admin
   await assertFails(
     aliceDb.collection("residents").doc(ADMIN_UID).update({
       role: "member",
       roleLabel: "Warga / Member",
-      updatedAt: tsPast(400),
+      updatedAt: tsPast(300),
     })
   );
   await assertFails(aliceDb.collection("residents").doc(ADMIN_UID).delete());
 
-  // Primary Admin demotes Alice back to member atomically
-  const demoteBatch = adminDb.batch();
-  demoteBatch.update(adminDb.collection("residents").doc(ALICE_UID), {
-    role: "member",
-    roleLabel: "Warga / Member",
-    updatedAt: tsPast(300),
-  });
-  demoteBatch.delete(adminDb.collection("admins").doc(ALICE_UID));
-  await assertSucceeds(demoteBatch.commit());
-
-  // Demoted Alice can no longer list all residents or edit Bob's profile
-  await assertFails(aliceDb.collection("residents").get());
-  await assertFails(
-    aliceDb.collection("residents").doc(BOB_UID).update({
-      name: "Should Fail",
-      updatedAt: tsPast(100),
-    })
-  );
+  // Primary Admin CAN delete Pengurus Blok (uid_4) atomically
+  const deleteBatch = adminDb.batch();
+  deleteBatch.delete(adminDb.collection("residents").doc("uid_4"));
+  deleteBatch.delete(adminDb.collection("admins").doc("uid_4"));
+  await assertSucceeds(deleteBatch.commit());
 });
 
-test("DANA webhook config & events: strictly isolated to Admin, members/unauth denied", async () => {
+test("DANA webhook config & events + Live Presence & Activity Logs: strictly Primary Admin Only", async () => {
   const adminDb = testEnv.authenticatedContext(ADMIN_UID, {
     email: ADMIN_EMAIL,
     email_verified: true,
@@ -680,25 +766,25 @@ test("DANA webhook config & events: strictly isolated to Admin, members/unauth d
   }).firestore();
   const unauthDb = testEnv.unauthenticatedContext().firestore();
 
-  // Unauth and regular resident cannot read or write webhook config or events
+  // Promote Alice to Pengurus Blok to prove even Pengurus Blok is blocked from Webhook & Live Monitoring
+  await assertSucceeds(
+    adminDb.collection("admins").doc(ALICE_UID).set({
+      userId: ALICE_UID,
+      email: "alice@example.com",
+      roleLabel: "Pengurus Blok",
+      inviteCode: "DIRECT_ASSIGN",
+      grantedByUid: ADMIN_UID,
+      createdAt: tsPast(3000),
+    })
+  );
+
+  // Unauth and Pengurus Blok (Alice) CANNOT read or write webhook config or events
   await assertFails(unauthDb.collection("admin_configs").doc("dana_webhook").get());
   await assertFails(aliceDb.collection("admin_configs").doc("dana_webhook").get());
   await assertFails(unauthDb.collection("dana_webhook_events").get());
   await assertFails(aliceDb.collection("dana_webhook_events").get());
 
-  await assertFails(
-    aliceDb.collection("admin_configs").doc("dana_webhook").set({
-      webhookUrl: "https://example.com/hook",
-      webhookSecret: "stolen",
-      relayFromAndroidEnabled: true,
-      autoVerifyWebhookEvents: true,
-      updatedByUid: ALICE_UID,
-      createdAt: tsPast(),
-      updatedAt: tsPast(),
-    })
-  );
-
-  // Admin can create & update webhook config
+  // Primary Admin can create & update webhook config
   await assertSucceeds(
     adminDb.collection("admin_configs").doc("dana_webhook").set({
       webhookUrl: "https://webhook.blokcepsa.id/webhook/dana",
@@ -719,10 +805,10 @@ test("DANA webhook config & events: strictly isolated to Admin, members/unauth d
     })
   );
 
-  // Regular member STILL cannot read admin secret config
+  // Pengurus Blok STILL cannot read secret webhook config
   await assertFails(aliceDb.collection("admin_configs").doc("dana_webhook").get());
 
-  // Admin writes & updates incoming webhook event and members cannot access
+  // Primary Admin manages incoming webhook events; Pengurus Blok cannot
   await assertSucceeds(
     adminDb.collection("dana_webhook_events").doc("DANA_WH_001").set({
       referenceId: "DANA_WH_001",
@@ -743,18 +829,164 @@ test("DANA webhook config & events: strictly isolated to Admin, members/unauth d
     })
   );
   await assertSucceeds(adminDb.collection("dana_webhook_events").get());
+  await assertFails(aliceDb.collection("dana_webhook_events").doc("DANA_WH_001").get());
+  await assertSucceeds(adminDb.collection("dana_webhook_events").doc("DANA_WH_001").delete());
+
+  // Live User Presence & Activity Logs
   await assertSucceeds(
-    adminDb.collection("dana_webhook_events").doc("DANA_WH_001").update({
-      status: "AUTO_VERIFIED",
-      matchedPaymentId: `${ALICE_UID}_2026-11_iuran`,
-      matchedSummary: "LUNAS OTOMATIS",
-      verifiedByUid: ADMIN_UID,
+    aliceDb.collection("user_presence").doc(ALICE_UID).set({
+      userId: ALICE_UID,
+      name: "Alice",
+      house: "Blok CE-01",
+      email: "alice@example.com",
+      role: "admin",
+      roleLabel: "Pengurus Blok",
+      online: true,
+      activeScreen: "Home",
+      lastSeenMillis: Date.now(),
       updatedAt: tsPast(500),
     })
   );
-  await assertFails(aliceDb.collection("dana_webhook_events").doc("DANA_WH_001").get());
-  await assertFails(aliceDb.collection("dana_webhook_events").doc("DANA_WH_001").delete());
-  await assertSucceeds(adminDb.collection("dana_webhook_events").doc("DANA_WH_001").delete());
+  await assertFails(aliceDb.collection("user_presence").get());
+  await assertSucceeds(adminDb.collection("user_presence").get());
+
+  await assertSucceeds(
+    aliceDb.collection("activity_logs").doc("log_alice_1").set({
+      userId: ALICE_UID,
+      userName: "Alice",
+      userEmail: "alice@example.com",
+      userRole: "Pengurus Blok",
+      house: "Blok CE-01",
+      actionType: "LOGIN",
+      screen: "Home",
+      detail: "Masuk portal Blok CE PSA",
+      createdAt: tsPast(500),
+    })
+  );
+  // Alice cannot forge another user's activity log or read global logs
+  await assertFails(
+    aliceDb.collection("activity_logs").doc("log_spoof").set({
+      userId: BOB_UID,
+      userName: "Bob",
+      userEmail: "bob@example.com",
+      userRole: "Warga",
+      house: "Blok CE-02",
+      actionType: "LOGIN",
+      screen: "Home",
+      detail: "Spoof",
+      createdAt: tsPast(500),
+    })
+  );
+  await assertFails(aliceDb.collection("activity_logs").get());
+  await assertSucceeds(adminDb.collection("activity_logs").get());
 });
+
+test("Finance entries & Budget plans: Warga and Pengurus Blok read-only, Primary Admin full CRUD", async () => {
+  const adminDb = testEnv.authenticatedContext(ADMIN_UID, {
+    email: ADMIN_EMAIL,
+    email_verified: true,
+  }).firestore();
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID, {
+    email: "alice@example.com",
+    email_verified: true,
+  }).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID, {
+    email: "bob@example.com",
+    email_verified: true,
+  }).firestore();
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+  // Promote Alice to Pengurus Blok
+  await assertSucceeds(
+    adminDb.collection("admins").doc(ALICE_UID).set({
+      userId: ALICE_UID,
+      email: "alice@example.com",
+      roleLabel: "Pengurus Blok",
+      inviteCode: "DIRECT_ASSIGN",
+      grantedByUid: ADMIN_UID,
+      createdAt: tsPast(3000),
+    })
+  );
+
+  // Admin Utama creates finance entries (masuk, keluar, kas_blok) & budget plan
+  await assertSucceeds(
+    adminDb.collection("finance_entries").doc("fin_1").set({
+      kind: "kas_blok",
+      title: "Saldo Awal Kas Blok CE",
+      category: "Saldo Kas",
+      amount: 2500000,
+      month: "2026-11",
+      dateLabel: "01 Nov 2026",
+      note: "Saldo pembukuan kas blok",
+      createdByUid: ADMIN_UID,
+      createdByName: "Admin Utama",
+      createdAt: tsPast(2000),
+      updatedAt: tsPast(2000),
+    })
+  );
+  await assertSucceeds(
+    adminDb.collection("budget_plans").doc("plan_1").set({
+      title: "Renovasi Lampu Jalan Blok CE",
+      category: "Infrastruktur",
+      month: "2026-11",
+      plannedAmount: 1500000,
+      realizedAmount: 500000,
+      status: "in_progress",
+      note: "Pengadaan 4 unit lampu LED",
+      createdByUid: ADMIN_UID,
+      updatedByName: "Admin Utama",
+      createdAt: tsPast(2000),
+      updatedAt: tsPast(2000),
+    })
+  );
+
+  // Unauthenticated reads fail
+  await assertFails(unauthDb.collection("finance_entries").get());
+  await assertFails(unauthDb.collection("budget_plans").get());
+
+  // Warga (Bob) & Pengurus Blok (Alice) CAN read
+  await assertSucceeds(bobDb.collection("finance_entries").get());
+  await assertSucceeds(aliceDb.collection("finance_entries").get());
+  await assertSucceeds(bobDb.collection("budget_plans").get());
+  await assertSucceeds(aliceDb.collection("budget_plans").get());
+
+  // Warga (Bob) & Pengurus Blok (Alice) CANNOT create, update, or delete finance entries or budget plans
+  await assertFails(
+    aliceDb.collection("finance_entries").doc("fin_alice").set({
+      kind: "keluar",
+      title: "Pengeluaran Pengurus",
+      category: "Operasional",
+      amount: 100000,
+      month: "2026-11",
+      dateLabel: "18 Nov 2026",
+      note: "",
+      createdByUid: ALICE_UID,
+      createdByName: "Alice",
+      createdAt: tsPast(1000),
+      updatedAt: tsPast(1000),
+    })
+  );
+  await assertFails(
+    bobDb.collection("budget_plans").doc("plan_1").update({
+      realizedAmount: 999999,
+      updatedAt: tsPast(500),
+    })
+  );
+  await assertFails(aliceDb.collection("finance_entries").doc("fin_1").delete());
+  await assertFails(aliceDb.collection("budget_plans").doc("plan_1").delete());
+
+  // Admin Utama CAN update and delete
+  await assertSucceeds(
+    adminDb.collection("budget_plans").doc("plan_1").update({
+      realizedAmount: 1500000,
+      status: "completed",
+      updatedAt: tsPast(300),
+    })
+  );
+  await assertSucceeds(adminDb.collection("finance_entries").doc("fin_1").delete());
+  await assertSucceeds(adminDb.collection("budget_plans").doc("plan_1").delete());
+});
+
+
 
 

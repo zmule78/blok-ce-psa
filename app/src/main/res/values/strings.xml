@@ -17,4 +17,11 @@
     <string name="biometric_toggle_subtitle">Konfirmasi Sidik Jari atau Wajah untuk mengubah kunci portal</string>
     <string name="biometric_negative_cancel">Batal</string>
     <string name="biometric_emblem_cd">Ikon keamanan sidik jari dan wajah</string>
+    <string name="scan_receipt_title">Scan Struk / Bukti Transfer</string>
+    <string name="scan_receipt_instruction">Arahkan kamera ke struk DANA / transfer bank atau pilih foto galeri</string>
+    <string name="receipt_scanner_close_cd">Tutup pemindai struk</string>
+    <string name="notification_channel_himbauan_name">Himbauan &amp; Info Blok CE</string>
+    <string name="notification_channel_himbauan_desc">Notifikasi pop-up pengingat iuran, pengumuman mendesak, dan info warga</string>
+    <string name="notification_channel_pending_name">Pengingat Status Pembayaran Pending</string>
+    <string name="notification_channel_pending_desc">Layanan otomatis pengingat tagihan berstatus pending bulan berjalan</string>
 </resources>

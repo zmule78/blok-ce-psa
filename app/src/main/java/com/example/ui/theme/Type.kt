@@ -27,71 +27,76 @@ val JetBrainsMonoFamily = FontFamily(
     Font(R.font.jetbrains_mono, FontWeight.Bold)
 )
 
-val AppTypography = Typography(
-    headlineMedium = TextStyle(
-        fontFamily = PlusJakartaSansFamily,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 24.sp,
-        lineHeight = 32.sp
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = PlusJakartaSansFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 20.sp,
-        lineHeight = 28.sp
-    ),
-    titleLarge = TextStyle(
-        fontFamily = PlusJakartaSansFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp
-    ),
-    titleMedium = TextStyle(
-        fontFamily = PlusJakartaSansFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 15.sp,
-        lineHeight = 20.sp
-    ),
-    titleSmall = TextStyle(
-        fontFamily = PlusJakartaSansFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 19.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
-        lineHeight = 16.sp
-    ),
-    labelLarge = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 11.sp,
-        lineHeight = 16.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = InterFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 10.sp,
-        lineHeight = 14.sp
+fun buildResponsiveTypography(scale: Float = 1.0f): Typography {
+    fun s(base: Float) = (base * scale).sp
+    return Typography(
+        headlineMedium = TextStyle(
+            fontFamily = PlusJakartaSansFamily,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = s(24f),
+            lineHeight = s(32f)
+        ),
+        headlineSmall = TextStyle(
+            fontFamily = PlusJakartaSansFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = s(20f),
+            lineHeight = s(28f)
+        ),
+        titleLarge = TextStyle(
+            fontFamily = PlusJakartaSansFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = s(18f),
+            lineHeight = s(24f)
+        ),
+        titleMedium = TextStyle(
+            fontFamily = PlusJakartaSansFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = s(15f),
+            lineHeight = s(20f)
+        ),
+        titleSmall = TextStyle(
+            fontFamily = PlusJakartaSansFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = s(13f),
+            lineHeight = s(18f)
+        ),
+        bodyLarge = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = s(15f),
+            lineHeight = s(22f)
+        ),
+        bodyMedium = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = s(13f),
+            lineHeight = s(19f)
+        ),
+        bodySmall = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = s(11.5f),
+            lineHeight = s(16f)
+        ),
+        labelLarge = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = s(13f),
+            lineHeight = s(18f)
+        ),
+        labelMedium = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = s(11.5f),
+            lineHeight = s(16f)
+        ),
+        labelSmall = TextStyle(
+            fontFamily = InterFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = s(10.5f),
+            lineHeight = s(14f)
+        )
     )
-)
+}
+
+val AppTypography = buildResponsiveTypography(1.0f)

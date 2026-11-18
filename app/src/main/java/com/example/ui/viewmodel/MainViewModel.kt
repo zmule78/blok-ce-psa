@@ -7,31 +7,40 @@ import androidx.lifecycle.viewModelScope
 import com.example.dana.DanaLiveBridge
 import com.example.dana.DanaWebhookDispatcher
 import com.example.data.local.DanaLiveEventEntity
+import com.example.data.model.ActivityLog
 import com.example.data.model.AdminInvite
 import com.example.data.model.AdminRecord
 import com.example.data.model.Announcement
+import com.example.data.model.BudgetPlan
 import com.example.data.model.DanaWebhookConfig
 import com.example.data.model.DanaWebhookEvent
 import com.example.data.model.DuesStatus
+import com.example.data.model.FinanceEntry
 import com.example.data.model.MonthlySummary
 import com.example.data.model.Payment
 import com.example.data.model.PaymentPackage
 import com.example.data.model.Resident
 import com.example.data.model.SystemSettings
+import com.example.data.model.UserPresence
 import com.example.data.model.computeMonthSummary
 import com.example.data.model.currentBillingPeriodCode
+import com.example.data.model.formatRupiah
 import com.example.data.model.monthLabel
 import com.example.data.repository.BlokCeRepository
 import com.example.data.repository.SubmissionOutcome
 import java.util.Collections
 import com.example.ui.components.ScannedQrisInfo
+import com.example.ui.screens.ScannedReceiptResult
 import com.example.worker.BillingWorkerStatus
 import com.example.worker.MonthlyBillingScheduler
+import com.example.worker.PendingNotifierStatus
+import com.example.worker.PendingPaymentNotificationScheduler
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,10 +54,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class MainTab {
     HOME,
     PAY,
+    FINANCE,
     INFO,
     ADMIN_WARGA,
     ACCOUNT
@@ -83,17 +94,24 @@ data class MainUiState(
     val adminInvites: List<AdminInvite> = emptyList(),
     val delegatedAdmins: List<AdminRecord> = emptyList(),
     val billingWorkerStatus: BillingWorkerStatus = BillingWorkerStatus(),
+    val pendingNotifierStatus: PendingNotifierStatus = PendingNotifierStatus(),
     val danaLiveEvents: List<DanaLiveEventEntity> = emptyList(),
     val danaListenerEnabled: Boolean = false,
     val danaAutoVerifyEnabled: Boolean = true,
     val danaWebhookConfig: DanaWebhookConfig = DanaWebhookConfig(),
     val danaWebhookEvents: List<DanaWebhookEvent> = emptyList(),
+    val financeEntries: List<FinanceEntry> = emptyList(),
+    val budgetPlans: List<BudgetPlan> = emptyList(),
+    val onlinePresence: List<UserPresence> = emptyList(),
+    val activityLogs: List<ActivityLog> = emptyList(),
     val pendingOfflineCount: Int = 0,
     val announcements: List<Announcement> = emptyList(),
     val monthlySummary: MonthlySummary? = null,
     val showQrisZoom: Boolean = false,
     val showQrisScanner: Boolean = false,
     val scannedQris: ScannedQrisInfo? = null,
+    val showReceiptScanner: Boolean = false,
+    val scannedReceipt: ScannedReceiptResult? = null,
     val showReminderDialog: Boolean = false,
     val showAdminAccessDeniedDialog: Boolean = false,
     val isMutating: Boolean = false,
@@ -122,6 +140,9 @@ class MainViewModel(
     private val _billingWorkerStatus = MutableStateFlow(
         appContext?.let { MonthlyBillingScheduler.getStatus(it) } ?: BillingWorkerStatus()
     )
+    private val _pendingNotifierStatus = MutableStateFlow(
+        appContext?.let { PendingPaymentNotificationScheduler.getStatus(it) } ?: PendingNotifierStatus()
+    )
     private val _danaListenerEnabled = MutableStateFlow(
         appContext?.let { DanaLiveBridge.isNotificationListenerEnabled(it) } ?: false
     )
@@ -131,6 +152,8 @@ class MainViewModel(
     private val _showQrisZoom = MutableStateFlow(false)
     private val _showQrisScanner = MutableStateFlow(false)
     private val _scannedQris = MutableStateFlow<ScannedQrisInfo?>(null)
+    private val _showReceiptScanner = MutableStateFlow(false)
+    private val _scannedReceipt = MutableStateFlow<ScannedReceiptResult?>(null)
     private val _showReminderDialog = MutableStateFlow(false)
     private val _showAdminAccessDeniedDialog = MutableStateFlow(false)
     private val _isMutating = MutableStateFlow(false)
@@ -243,16 +266,16 @@ class MainViewModel(
         }
     }
 
-    private val danaLiveEventsFlow: Flow<List<DanaLiveEventEntity>> = isAdminFlow.flatMapLatest { isAdmin ->
-        if (isAdmin) {
+    private val danaLiveEventsFlow: Flow<List<DanaLiveEventEntity>> = isPrimaryAdminFlow.flatMapLatest { isPrimary ->
+        if (isPrimary) {
             repository.observeDanaLiveEvents()
         } else {
             flowOf(emptyList())
         }
     }
 
-    private val danaWebhookConfigFlow: Flow<DanaWebhookConfig> = isAdminFlow.flatMapLatest { isAdmin ->
-        if (isAdmin) {
+    private val danaWebhookConfigFlow: Flow<DanaWebhookConfig> = isPrimaryAdminFlow.flatMapLatest { isPrimary ->
+        if (isPrimary) {
             repository.observeDanaWebhookConfig()
                 .catch { error ->
                     val firestoreError = generateSequence<Throwable>(error) { it.cause }
@@ -277,8 +300,8 @@ class MainViewModel(
         }
     }
 
-    private val danaWebhookEventsFlow: Flow<List<DanaWebhookEvent>> = isAdminFlow.flatMapLatest { isAdmin ->
-        if (isAdmin) {
+    private val danaWebhookEventsFlow: Flow<List<DanaWebhookEvent>> = isPrimaryAdminFlow.flatMapLatest { isPrimary ->
+        if (isPrimary) {
             repository.observeDanaWebhookEvents()
                 .catch { error ->
                     val firestoreError = generateSequence<Throwable>(error) { it.cause }
@@ -308,6 +331,54 @@ class MainViewModel(
                             }
                         }
                     }
+                }
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    private val financeEntriesFlow: Flow<List<FinanceEntry>> = repository.observeFinanceEntries()
+        .catch { error ->
+            val firestoreError = generateSequence<Throwable>(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            emit(emptyList())
+        }
+
+    private val budgetPlansFlow: Flow<List<BudgetPlan>> = repository.observeBudgetPlans()
+        .catch { error ->
+            val firestoreError = generateSequence<Throwable>(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            emit(emptyList())
+        }
+
+    private val onlinePresenceFlow: Flow<List<UserPresence>> = isPrimaryAdminFlow.flatMapLatest { isPrimary ->
+        if (isPrimary) {
+            repository.observeOnlinePresence()
+                .catch { error ->
+                    val firestoreError = generateSequence<Throwable>(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    emit(emptyList())
+                }
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    private val activityLogsFlow: Flow<List<ActivityLog>> = isPrimaryAdminFlow.flatMapLatest { isPrimary ->
+        if (isPrimary) {
+            repository.observeActivityLogs()
+                .catch { error ->
+                    val firestoreError = generateSequence<Throwable>(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    emit(emptyList())
                 }
         } else {
             flowOf(emptyList())
@@ -391,10 +462,27 @@ class MainViewModel(
         )
     }
 
+    private val financeAndMonitorFlow = combine(
+        financeEntriesFlow,
+        budgetPlansFlow,
+        onlinePresenceFlow,
+        activityLogsFlow,
+        _pendingNotifierStatus
+    ) { entries, plans, presence, logs, pendingNotif ->
+        FinanceAndMonitorBundle(entries, plans, presence, logs, pendingNotif)
+    }
+
+    private val adminAndFinanceFlow = combine(
+        adminManagementFlow,
+        financeAndMonitorFlow
+    ) { adminMgmt, finMon -> adminMgmt to finMon }
+
     private val dialogStateFlow = combine(
         _showQrisZoom,
         _showQrisScanner,
         _scannedQris,
+        _showReceiptScanner,
+        _scannedReceipt,
         _showReminderDialog,
         _showAdminAccessDeniedDialog,
         _isMutating,
@@ -404,10 +492,12 @@ class MainViewModel(
             showQrisZoom = args[0] as Boolean,
             showQrisScanner = args[1] as Boolean,
             scannedQris = args[2] as ScannedQrisInfo?,
-            showReminderDialog = args[3] as Boolean,
-            showAdminAccessDeniedDialog = args[4] as Boolean,
-            isMutating = args[5] as Boolean,
-            errorBanner = args[6] as String?
+            showReceiptScanner = args[3] as Boolean,
+            scannedReceipt = args[4] as ScannedReceiptResult?,
+            showReminderDialog = args[5] as Boolean,
+            showAdminAccessDeniedDialog = args[6] as Boolean,
+            isMutating = args[7] as Boolean,
+            errorBanner = args[8] as String?
         )
     }
 
@@ -416,8 +506,8 @@ class MainViewModel(
         secondaryDataFlow,
         uiControlFlow,
         dialogStateFlow,
-        adminManagementFlow
-    ) { core, sec, ctrl, dlg, adminMgmt ->
+        adminAndFinanceFlow
+    ) { core, sec, ctrl, dlg, (adminMgmt, finMon) ->
         evaluateReminderPopup(core.settings, core.currentResident, core.userPayments, ctrl.selectedMonth)
         val effectiveTab = if (ctrl.activeTab == MainTab.ADMIN_WARGA && core.currentResident?.adminRole != true) {
             MainTab.HOME
@@ -440,17 +530,24 @@ class MainViewModel(
             adminInvites = adminMgmt.invites,
             delegatedAdmins = adminMgmt.delegatedAdmins,
             billingWorkerStatus = adminMgmt.workerStatus,
+            pendingNotifierStatus = finMon.pendingNotifierStatus,
             danaLiveEvents = adminMgmt.danaEvents,
             danaListenerEnabled = adminMgmt.danaListenerEnabled,
             danaAutoVerifyEnabled = adminMgmt.danaAutoVerifyEnabled,
             danaWebhookConfig = adminMgmt.danaWebhookConfig,
             danaWebhookEvents = adminMgmt.danaWebhookEvents,
+            financeEntries = finMon.financeEntries,
+            budgetPlans = finMon.budgetPlans,
+            onlinePresence = finMon.onlinePresence,
+            activityLogs = finMon.activityLogs,
             pendingOfflineCount = sec.pendingCount,
             announcements = sec.announcements,
             monthlySummary = sec.monthlySummary,
             showQrisZoom = dlg.showQrisZoom,
             showQrisScanner = dlg.showQrisScanner,
             scannedQris = dlg.scannedQris,
+            showReceiptScanner = dlg.showReceiptScanner,
+            scannedReceipt = dlg.scannedReceipt,
             showReminderDialog = dlg.showReminderDialog,
             showAdminAccessDeniedDialog = dlg.showAdminAccessDeniedDialog,
             isMutating = dlg.isMutating,
@@ -479,14 +576,24 @@ class MainViewModel(
                         _toastEvent.value = err.localizedMessage ?: "Kode undangan admin tidak valid."
                     }
                 }
-                if (requestedAdminPortal && residentRes.getOrNull()?.adminRole != true) {
+                val resident = residentRes.getOrNull()
+                if (requestedAdminPortal && resident?.adminRole != true) {
                     _showAdminAccessDeniedDialog.value = true
                 }
                 if (appContext != null) {
                     MonthlyBillingScheduler.ensureMonthlyBillingScheduled(appContext)
                     _billingWorkerStatus.value = MonthlyBillingScheduler.getStatus(appContext)
+                    PendingPaymentNotificationScheduler.ensureScheduled(appContext)
+                    _pendingNotifierStatus.value = PendingPaymentNotificationScheduler.getStatus(appContext)
                 }
                 repository.flushOfflinePayments()
+                repository.upsertUserPresence(resident, tabLabel(_activeTab.value), online = true)
+                repository.logActivity(
+                    resident = resident,
+                    actionType = "LOGIN",
+                    screen = tabLabel(_activeTab.value),
+                    detail = "Membuka aplikasi (${resident?.roleLabel ?: "Warga"})"
+                )
             }
             _bootstrapped.value = true
         }
@@ -504,16 +611,31 @@ class MainViewModel(
 
         val blastId = settings.pushBlastId
         val target = settings.pushTargetUserId.ifBlank { "all_unpaid" }
-        val isNewBlast = blastId > lastHandledPushBlastId &&
-            (target == "all_unpaid" || target == resident.id)
+        val hasPendingThisMonth = summary.overall == DuesStatus.PENDING ||
+            payments.any { it.month == month && it.status == "pending" }
+        val matchesTarget = when (target) {
+            "all_unpaid" -> true
+            "all_pending" -> hasPendingThisMonth
+            else -> target == resident.id
+        }
+        val isNewBlast = blastId > lastHandledPushBlastId && matchesTarget
 
         if (isNewBlast) {
             lastHandledPushBlastId = blastId
             dismissedReminderThisSession = false
             _showReminderDialog.value = true
-        } else if (settings.reminderEnabled && !dismissedReminderThisSession) {
+        } else if (settings.reminderEnabled && !dismissedReminderThisSession && matchesTarget) {
             _showReminderDialog.value = true
         }
+    }
+
+    private fun tabLabel(tab: MainTab): String = when (tab) {
+        MainTab.HOME -> "Beranda"
+        MainTab.PAY -> "Bayar"
+        MainTab.FINANCE -> "Keuangan"
+        MainTab.INFO -> "Info"
+        MainTab.ADMIN_WARGA -> "Admin"
+        MainTab.ACCOUNT -> "Akun"
     }
 
     private fun requireAdminAccess(): Boolean {
@@ -522,13 +644,44 @@ class MainViewModel(
         return false
     }
 
+    private fun requirePrimaryAdminAccess(): Boolean {
+        if (uiState.value.currentResident?.primaryAdmin == true) return true
+        _toastEvent.value = "Akses khusus Admin Utama (${BlokCeRepository.BOOTSTRAPPED_ADMIN_EMAIL})."
+        return false
+    }
+
+    fun setPresenceOnline(online: Boolean) {
+        val state = uiState.value
+        val resident = state.currentResident ?: return
+        viewModelScope.launch {
+            repository.upsertUserPresence(resident, tabLabel(state.activeTab), online)
+        }
+    }
+
     fun selectTab(tab: MainTab) {
-        if (tab == MainTab.ADMIN_WARGA && uiState.value.currentResident?.adminRole != true) {
+        val state = uiState.value
+        if (tab == MainTab.ADMIN_WARGA && state.currentResident?.adminRole != true) {
             _showAdminAccessDeniedDialog.value = true
             _toastEvent.value = "Akses Admin Warga khusus akun dengan role: admin."
             return
         }
+        val previous = _activeTab.value
         _activeTab.value = tab
+        if (previous != tab) {
+            val label = tabLabel(tab)
+            val resident = state.currentResident
+            if (resident != null) {
+                viewModelScope.launch {
+                    repository.upsertUserPresence(resident, label, online = true)
+                    repository.logActivity(
+                        resident = resident,
+                        actionType = "NAVIGATE",
+                        screen = label,
+                        detail = "Membuka tab $label"
+                    )
+                }
+            }
+        }
     }
 
     fun selectMonth(month: String) {
@@ -573,6 +726,35 @@ class MainViewModel(
 
     fun clearScannedQris() {
         _scannedQris.value = null
+    }
+
+    fun openReceiptScanner() {
+        _showReceiptScanner.value = true
+    }
+
+    fun closeReceiptScanner() {
+        _showReceiptScanner.value = false
+    }
+
+    fun onReceiptScanned(result: ScannedReceiptResult) {
+        _scannedReceipt.value = result
+        _showReceiptScanner.value = false
+        _toastEvent.value = "Struk pembayaran siap dilampirkan!"
+        val resident = uiState.value.currentResident
+        if (resident != null) {
+            viewModelScope.launch {
+                repository.logActivity(
+                    resident = resident,
+                    actionType = "RECEIPT_SCAN",
+                    screen = "Bayar",
+                    detail = result.parsed.summaryText.ifBlank { "Memindai struk pembayaran" }
+                )
+            }
+        }
+    }
+
+    fun clearScannedReceipt() {
+        _scannedReceipt.value = null
     }
 
     fun dismissReminderDialog() {
@@ -695,7 +877,7 @@ class MainViewModel(
     }
 
     fun setDanaAutoVerifyEnabled(enabled: Boolean) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         appContext?.let {
             DanaLiveBridge.setAutoVerifyEnabled(it, enabled)
             _danaAutoVerifyEnabled.value = enabled
@@ -708,7 +890,7 @@ class MainViewModel(
     }
 
     fun adminVerifyLiveDanaManual(eventId: Long, paymentId: String, senderHint: String) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.verifyLiveDanaForPayment(eventId, paymentId, senderHint)
@@ -723,7 +905,7 @@ class MainViewModel(
     }
 
     fun adminClearDanaLiveEvents() {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             repository.clearDanaLiveEvents()
             _toastEvent.value = "Log mutasi notifikasi DANA dibersihkan."
@@ -736,7 +918,7 @@ class MainViewModel(
         relayEnabled: Boolean,
         autoVerifyEnabled: Boolean
     ) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             _isMutating.value = true
             val cfg = DanaWebhookConfig(
@@ -760,7 +942,7 @@ class MainViewModel(
     }
 
     fun adminTestWebhookPing(webhookUrl: String, webhookSecret: String) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             _isMutating.value = true
             val res = DanaWebhookDispatcher.sendPing(webhookUrl, webhookSecret)
@@ -774,7 +956,7 @@ class MainViewModel(
     }
 
     fun adminVerifyWebhookEventManual(eventId: String, paymentId: String, senderName: String) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.verifyWebhookEventForPayment(eventId, paymentId, senderName)
@@ -789,7 +971,7 @@ class MainViewModel(
     }
 
     fun adminDeleteWebhookEvent(eventId: String) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         viewModelScope.launch {
             val res = repository.deleteDanaWebhookEvent(eventId)
             _toastEvent.value = if (res.isSuccess) {
@@ -852,16 +1034,33 @@ class MainViewModel(
             return
         }
 
+        val receiptImg = _scannedReceipt.value?.receiptImageUrl.orEmpty()
+        val receiptOcr = _scannedReceipt.value?.parsed?.summaryText.orEmpty()
+
         viewModelScope.launch {
             _isMutating.value = true
-            val result = repository.submitPayment(state.selectedMonth, items, method, note)
+            val result = repository.submitPayment(
+                month = state.selectedMonth,
+                types = items,
+                method = method,
+                note = note,
+                receiptImageUrl = receiptImg,
+                receiptOcrText = receiptOcr
+            )
             _isMutating.value = false
             result.onSuccess { outcome ->
                 _scannedQris.value = null
+                _scannedReceipt.value = null
                 _toastEvent.value = when (outcome) {
                     SubmissionOutcome.SENT_CLOUD -> "Konfirmasi terkirim! Menunggu verifikasi Admin."
                     SubmissionOutcome.QUEUED_OFFLINE -> "Offline: disimpan ke SQLite lokal, otomatis terkirim saat online."
                 }
+                repository.logActivity(
+                    resident = resident,
+                    actionType = "PAYMENT_SUBMIT",
+                    screen = "Bayar",
+                    detail = "${items.joinToString("+") { it.first.uppercase() }} ${monthLabel(state.selectedMonth)} ($method)"
+                )
             }.onFailure { err ->
                 _toastEvent.value = err.localizedMessage ?: "Gagal mengirim konfirmasi."
             }
@@ -896,12 +1095,14 @@ class MainViewModel(
 
     fun adminVerifyPayment(paymentId: String) {
         if (!requireAdminAccess()) return
+        val actor = uiState.value.currentResident
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.verifyPayment(paymentId)
             if (res.isSuccess) {
                 syncSummaryAfterMutation()
                 _toastEvent.value = "Pembayaran diverifikasi LUNAS."
+                repository.logActivity(actor, "ADMIN_ACTION", "Admin", "Verifikasi LUNAS transaksi $paymentId")
             } else {
                 _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal memverifikasi."
             }
@@ -911,12 +1112,14 @@ class MainViewModel(
 
     fun adminRejectPayment(paymentId: String) {
         if (!requireAdminAccess()) return
+        val actor = uiState.value.currentResident
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.rejectPayment(paymentId)
             if (res.isSuccess) {
                 syncSummaryAfterMutation()
                 _toastEvent.value = "Konfirmasi ditolak & direset."
+                repository.logActivity(actor, "ADMIN_ACTION", "Admin", "Menolak konfirmasi $paymentId")
             } else {
                 _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menolak pembayaran."
             }
@@ -927,6 +1130,7 @@ class MainViewModel(
     fun adminMarkPaid(targetUid: String, type: String) {
         if (!requireAdminAccess()) return
         val state = uiState.value
+        val actor = state.currentResident
         val amount = if (type == "hidmat") state.settings.hidmatAmount else state.settings.iuranAmount
         viewModelScope.launch {
             _isMutating.value = true
@@ -934,6 +1138,7 @@ class MainViewModel(
             if (res.isSuccess) {
                 syncSummaryAfterMutation()
                 _toastEvent.value = "${type.uppercase()} ditandai LUNAS."
+                repository.logActivity(actor, "ADMIN_ACTION", "Admin", "Menandai LUNAS ${type.uppercase()} (${state.selectedMonth})")
             } else {
                 _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal mencatat pembayaran."
             }
@@ -943,28 +1148,32 @@ class MainViewModel(
 
     fun adminToggleHidmat(targetUid: String, enabled: Boolean) {
         if (!requireAdminAccess()) return
+        val actor = uiState.value.currentResident
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.toggleResidentHidmat(targetUid, enabled)
-            _toastEvent.value = if (res.isSuccess) {
-                "Hidmat ${if (enabled) "diaktifkan" else "dinonaktifkan"}."
+            if (res.isSuccess) {
+                _toastEvent.value = "Hidmat ${if (enabled) "diaktifkan" else "dinonaktifkan"}."
+                repository.logActivity(actor, "ADMIN_ACTION", "Admin", "Hidmat ${if (enabled) "ON" else "OFF"} untuk $targetUid")
             } else {
-                res.exceptionOrNull()?.localizedMessage ?: "Gagal mengubah status Hidmat."
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal mengubah status Hidmat."
             }
             _isMutating.value = false
         }
     }
 
     fun adminDeleteResident(targetUid: String) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.deleteResident(targetUid)
             if (res.isSuccess) {
                 syncSummaryAfterMutation()
-                _toastEvent.value = "Data warga dihapus."
+                _toastEvent.value = "Akun berhasil dihapus oleh Admin Utama."
+                repository.logActivity(actor, "ADMIN_ACTION", "Admin", "Menghapus akun $targetUid")
             } else {
-                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menghapus warga."
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menghapus akun."
             }
             _isMutating.value = false
         }
@@ -979,15 +1188,17 @@ class MainViewModel(
         urgent: Boolean
     ) {
         if (!requireAdminAccess()) return
-        val authorName = uiState.value.currentResident?.name ?: "Admin"
+        val actor = uiState.value.currentResident
+        val authorName = actor?.name ?: "Admin"
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.saveAnnouncement(existingId, title, category, imageUrl, content, urgent, authorName)
             _isMutating.value = false
-            _toastEvent.value = if (res.isSuccess) {
-                "Informasi dipublikasikan!"
+            if (res.isSuccess) {
+                _toastEvent.value = "Informasi dipublikasikan!"
+                repository.logActivity(actor, "INFO_POST", "Info", "Publikasi info: ${title.take(60)}")
             } else {
-                res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan informasi."
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan informasi."
             }
         }
     }
@@ -1007,21 +1218,24 @@ class MainViewModel(
     }
 
     fun adminSaveSettings(updated: SystemSettings) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
         viewModelScope.launch {
             _isMutating.value = true
             val res = repository.saveSystemSettings(updated)
             _isMutating.value = false
-            _toastEvent.value = if (res.isSuccess) {
-                "Pengaturan blok disimpan!"
+            if (res.isSuccess) {
+                _toastEvent.value = "Pengaturan blok disimpan!"
+                repository.logActivity(actor, "SYSTEM_UPDATE", "Admin", "Memperbarui Sistem Admin Blok")
             } else {
-                res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan pengaturan."
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan pengaturan."
             }
         }
     }
 
     fun adminSendPushBlast(targetUserId: String = "all_unpaid") {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
         val updated = uiState.value.settings.copy(
             pushBlastId = System.currentTimeMillis(),
             pushTargetUserId = targetUserId,
@@ -1031,16 +1245,17 @@ class MainViewModel(
             _isMutating.value = true
             val res = repository.saveSystemSettings(updated)
             _isMutating.value = false
-            _toastEvent.value = if (res.isSuccess) {
-                "Push notif himbauan dikirim ke seluruh warga!"
+            if (res.isSuccess) {
+                _toastEvent.value = "Push notif himbauan dikirim ke seluruh warga!"
+                repository.logActivity(actor, "SYSTEM_UPDATE", "Admin", "Mengirim Push Blast Himbauan")
             } else {
-                res.exceptionOrNull()?.localizedMessage ?: "Gagal mengirim himbauan."
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal mengirim himbauan."
             }
         }
     }
 
     fun adminToggleReminder(enabled: Boolean) {
-        if (!requireAdminAccess()) return
+        if (!requirePrimaryAdminAccess()) return
         val updated = uiState.value.settings.copy(reminderEnabled = enabled)
         viewModelScope.launch {
             val res = repository.saveSystemSettings(updated)
@@ -1048,6 +1263,181 @@ class MainViewModel(
                 "Himbauan otomatis ${if (enabled) "dinyalakan" else "dimatikan"}."
             } else {
                 res.exceptionOrNull()?.localizedMessage ?: "Gagal mengubah himbauan."
+            }
+        }
+    }
+
+    fun adminTogglePendingNotifierService(enabled: Boolean) {
+        if (!requirePrimaryAdminAccess()) return
+        val ctx = appContext ?: return
+        PendingPaymentNotificationScheduler.setServiceEnabled(ctx, enabled)
+        _pendingNotifierStatus.value = PendingPaymentNotificationScheduler.getStatus(ctx)
+        _toastEvent.value = if (enabled) {
+            "Layanan notifikasi otomatis status pending diaktifkan (cek tiap 12 jam)."
+        } else {
+            "Layanan notifikasi otomatis status pending dijeda."
+        }
+        val actor = uiState.value.currentResident
+        viewModelScope.launch {
+            repository.logActivity(
+                actor,
+                "SYSTEM_UPDATE",
+                "Admin",
+                "Notif Pending Otomatis ${if (enabled) "ON" else "OFF"}"
+            )
+        }
+    }
+
+    fun adminTriggerPendingPushNotificationNow() {
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
+        val updated = uiState.value.settings.copy(
+            pushBlastId = System.currentTimeMillis(),
+            pushTargetUserId = "all_pending",
+            reminderEnabled = true
+        )
+        viewModelScope.launch {
+            _isMutating.value = true
+            val res = repository.saveSystemSettings(updated)
+            _isMutating.value = false
+            if (res.isSuccess) {
+                appContext?.let { ctx ->
+                    PendingPaymentNotificationScheduler.setServiceEnabled(ctx, true)
+                    PendingPaymentNotificationScheduler.enqueueImmediateCheck(ctx, forceNotify = true)
+                    _pendingNotifierStatus.value = PendingPaymentNotificationScheduler.getStatus(ctx)
+                }
+                _toastEvent.value = "Push notif pengingat dikirim ke seluruh warga berstatus pending bulan ini!"
+                repository.logActivity(
+                    actor,
+                    "SYSTEM_UPDATE",
+                    "Admin",
+                    "Mengirim Notifikasi Otomatis Pending Bulan Ini"
+                )
+            } else {
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal memicu notifikasi pending."
+            }
+        }
+    }
+
+    fun logFinanceExport(formatLabel: String) {
+        val actor = uiState.value.currentResident ?: return
+        if (!actor.primaryAdmin) return
+        viewModelScope.launch {
+            repository.logActivity(
+                actor,
+                "FINANCE_UPDATE",
+                "Keuangan",
+                "Ekspor Ringkasan Keuangan ($formatLabel • ${monthLabel(uiState.value.selectedMonth)})"
+            )
+        }
+    }
+
+    fun adminSaveFinanceEntry(
+        existingId: String?,
+        kind: String,
+        title: String,
+        category: String,
+        amount: Long,
+        month: String,
+        note: String
+    ) {
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
+        viewModelScope.launch {
+            _isMutating.value = true
+            val res = repository.saveFinanceEntry(
+                existingId = existingId,
+                kind = kind,
+                title = title,
+                category = category,
+                amount = amount,
+                month = month,
+                note = note,
+                actorName = actor?.name ?: "Admin Utama"
+            )
+            _isMutating.value = false
+            if (res.isSuccess) {
+                _toastEvent.value = "Catatan keuangan disimpan!"
+                repository.logActivity(
+                    actor,
+                    "FINANCE_UPDATE",
+                    "Keuangan",
+                    "${kind.uppercase()} ${formatRupiah(amount)} • ${title.take(40)}"
+                )
+            } else {
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan catatan keuangan."
+            }
+        }
+    }
+
+    fun adminDeleteFinanceEntry(entryId: String) {
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
+        viewModelScope.launch {
+            _isMutating.value = true
+            val res = repository.deleteFinanceEntry(entryId)
+            _isMutating.value = false
+            if (res.isSuccess) {
+                _toastEvent.value = "Catatan keuangan dihapus."
+                repository.logActivity(actor, "FINANCE_UPDATE", "Keuangan", "Menghapus entri $entryId")
+            } else {
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menghapus catatan."
+            }
+        }
+    }
+
+    fun adminSaveBudgetPlan(
+        existingId: String?,
+        title: String,
+        category: String,
+        month: String,
+        plannedAmount: Long,
+        realizedAmount: Long,
+        status: String,
+        note: String
+    ) {
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
+        viewModelScope.launch {
+            _isMutating.value = true
+            val res = repository.saveBudgetPlan(
+                existingId = existingId,
+                title = title,
+                category = category,
+                month = month,
+                plannedAmount = plannedAmount,
+                realizedAmount = realizedAmount,
+                status = status,
+                note = note,
+                actorName = actor?.name ?: "Admin Utama"
+            )
+            _isMutating.value = false
+            if (res.isSuccess) {
+                _toastEvent.value = "Rencana anggaran disimpan!"
+                repository.logActivity(
+                    actor,
+                    "FINANCE_UPDATE",
+                    "Keuangan",
+                    "RAB: ${title.take(40)} (${formatRupiah(plannedAmount)})"
+                )
+            } else {
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menyimpan rencana anggaran."
+            }
+        }
+    }
+
+    fun adminDeleteBudgetPlan(planId: String) {
+        if (!requirePrimaryAdminAccess()) return
+        val actor = uiState.value.currentResident
+        viewModelScope.launch {
+            _isMutating.value = true
+            val res = repository.deleteBudgetPlan(planId)
+            _isMutating.value = false
+            if (res.isSuccess) {
+                _toastEvent.value = "Rencana anggaran dihapus."
+                repository.logActivity(actor, "FINANCE_UPDATE", "Keuangan", "Menghapus RAB $planId")
+            } else {
+                _toastEvent.value = res.exceptionOrNull()?.localizedMessage ?: "Gagal menghapus anggaran."
             }
         }
     }
@@ -1075,7 +1465,13 @@ class MainViewModel(
     }
 
     suspend fun clearCachesBeforeSignOut() {
-        repository.clearSensitiveLocalCaches()
+        val resident = uiState.value.currentResident
+        withContext(NonCancellable) {
+            runCatching {
+                repository.upsertUserPresence(resident, "Keluar", online = false)
+            }
+            repository.clearSensitiveLocalCaches()
+        }
     }
 }
 
@@ -1114,10 +1510,20 @@ private data class AdminManagementBundle(
     val danaWebhookEvents: List<DanaWebhookEvent>
 )
 
+private data class FinanceAndMonitorBundle(
+    val financeEntries: List<FinanceEntry>,
+    val budgetPlans: List<BudgetPlan>,
+    val onlinePresence: List<UserPresence>,
+    val activityLogs: List<ActivityLog>,
+    val pendingNotifierStatus: PendingNotifierStatus
+)
+
 private data class DialogStateBundle(
     val showQrisZoom: Boolean,
     val showQrisScanner: Boolean,
     val scannedQris: ScannedQrisInfo?,
+    val showReceiptScanner: Boolean,
+    val scannedReceipt: ScannedReceiptResult?,
     val showReminderDialog: Boolean,
     val showAdminAccessDeniedDialog: Boolean,
     val isMutating: Boolean,
